@@ -1,0 +1,9 @@
+name = "ai-website-worker"
+main = "worker/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+# These are placeholders – set the actual secrets in Cloudflare dashboard
+DEEPSEEK_API_KEY = ""
+RAILWAY_API_TOKEN = ""
+SPACESHIP_API_KEY = ""
