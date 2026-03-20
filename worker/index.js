@@ -1,3 +1,4 @@
+// Xroga AI Worker – Gemini Only
 export default {
   async fetch(request, env, ctx) {
     // Handle CORS preflight
@@ -16,7 +17,7 @@ export default {
       return handleAsk(request, env);
     }
 
-    return new Response("Xroga AI Assistant Worker is running", { status: 200 });
+    return new Response("Xroga AI Worker is running", { status: 200 });
   },
 };
 
@@ -25,8 +26,11 @@ async function handleAsk(request, env) {
     const { message } = await request.json();
     if (!message) throw new Error("No message provided");
 
-    const reply = await generateWithGemini(message, env.GEMINI_API_KEY);
+    // Use the Gemini API key from environment variables
+    const apiKey = env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set in worker environment");
 
+    const reply = await generateWithGemini(message, apiKey);
     return new Response(JSON.stringify({ success: true, reply }), {
       headers: {
         "Content-Type": "application/json",
@@ -46,16 +50,14 @@ async function handleAsk(request, env) {
 }
 
 async function generateWithGemini(message, apiKey) {
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  // List of Gemini models (only Gemini)
+  // List of Gemini models (free tier as of March 2026)
   const models = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3.1-pro-preview",
+    "gemini-2.5-flash",               // Best price-performance
+    "gemini-2.5-flash-lite",          // Fastest, budget-friendly
+    "gemini-2.5-pro",                 // Advanced reasoning & coding
+    "gemini-3-flash-preview",         // Frontier-class fast
+    "gemini-3.1-flash-lite-preview",  // High-volume workhorse
+    "gemini-3.1-pro-preview",         // Highly intelligent
   ];
 
   const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
@@ -101,5 +103,5 @@ async function generateWithGemini(message, apiKey) {
     }
   }
 
-  throw new Error(`All models failed. Last error: ${lastError}`);
+  throw new Error(`All Gemini models failed. Last error: ${lastError}`);
 }
