@@ -9,7 +9,6 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    /* Custom glassmorphism styles */
     .glass-card {
       background: rgba(255, 255, 255, 0.2);
       backdrop-filter: blur(10px);
@@ -62,7 +61,6 @@
 </head>
 <body class="gradient-bg min-h-screen flex items-center justify-center p-4">
   <div class="glass-card w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden">
-    <!-- Header -->
     <div class="p-4 border-b border-white/20 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <i data-lucide="bot" class="w-8 h-8 text-white"></i>
@@ -73,9 +71,7 @@
       </button>
     </div>
 
-    <!-- Chat Messages -->
     <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container">
-      <!-- Welcome message -->
       <div class="flex justify-start">
         <div class="message-bot max-w-[80%] p-3">
           <p>👋 Hello! I'm your AI assistant. Ask me anything—I'm here to help!</p>
@@ -83,7 +79,6 @@
       </div>
     </div>
 
-    <!-- Input Area -->
     <div class="p-4 border-t border-white/20">
       <div class="flex gap-3">
         <input type="text" id="userInput" placeholder="Type your question..." 
@@ -100,7 +95,8 @@
   <script>
     lucide.createIcons();
 
-    const API_BASE = "https://ai-website-builder.evanderthorne-help.workers.dev"; // Your worker URL
+    // Update this URL to your actual worker URL if it changes
+    const API_BASE = "https://ai-website-builder.evanderthorne-help.workers.dev";
     let isWaiting = false;
 
     function addMessage(content, isUser) {
@@ -149,12 +145,10 @@
       const message = input.value.trim();
       if (!message || isWaiting) return;
 
-      // Add user message to UI
       addMessage(message, true);
       input.value = '';
       input.focus();
 
-      // Show typing indicator
       showTyping();
       isWaiting = true;
 
@@ -190,7 +184,6 @@
       `;
     }
 
-    // Allow Enter key to send
     document.getElementById('userInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') sendMessage();
     });
