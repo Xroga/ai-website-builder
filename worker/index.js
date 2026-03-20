@@ -16,7 +16,6 @@ export default {
     if (url.pathname === "/ask" && request.method === "POST") {
       return handleAsk(request, env);
     }
-    // Optional: list available models for debugging
     if (url.pathname === "/models" && request.method === "GET") {
       return listModels(env);
     }
@@ -28,9 +27,7 @@ export default {
 async function handleAsk(request, env) {
   try {
     const { message } = await request.json();
-    if (!message) {
-      throw new Error("No message provided");
-    }
+    if (!message) throw new Error("No message provided");
 
     const reply = await generateWithGemini(message, env.GEMINI_API_KEY);
 
@@ -53,15 +50,17 @@ async function handleAsk(request, env) {
 }
 
 async function generateWithGemini(message, apiKey) {
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set");
-  }
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
-  // Ordered list of models to try (from your provided list)
+  // List of models from your free tier list (March 2026)
+  // Ordered by preference: stable, fast, then powerful fallbacks
   const models = [
-    "gemini-2.5-flash-preview",  // Gemini 2.5 Flash
-    "gemini-1.5-pro",            // stable alternative
-    "gemini-1.0-pro",            // older fallback
+    "gemini-2.5-flash",              // Best price-performance, fast, reasoning
+    "gemini-2.5-flash-lite",         // Fastest, most budget-friendly
+    "gemini-2.5-pro",                // Advanced reasoning and coding
+    "gemini-3-flash-preview",        // Frontier-class with fast speed (preview)
+    "gemini-3.1-flash-lite-preview", // High-volume workhorse (preview)
+    "gemini-3.1-pro-preview",        // Highly intelligent reasoning (preview)
   ];
 
   const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
@@ -78,7 +77,6 @@ async function generateWithGemini(message, apiKey) {
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 1000,
-      topP: 0.95,
     },
   };
 
@@ -113,19 +111,14 @@ async function generateWithGemini(message, apiKey) {
 
 async function listModels(env) {
   const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return new Response("GEMINI_API_KEY not set", { status: 500 });
-  }
-
+  if (!apiKey) return new Response("GEMINI_API_KEY not set", { status: 500 });
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
-    const data = await response.json();
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await resp.json();
     return new Response(JSON.stringify(data, null, 2), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(`Error fetching models: ${err.message}`, { status: 500 });
+    return new Response(`Error: ${err.message}`, { status: 500 });
   }
 }
