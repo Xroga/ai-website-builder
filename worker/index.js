@@ -1,3 +1,4 @@
+// worker/index.js
 export default {
   async fetch(request, env, ctx) {
     // Handle CORS preflight
@@ -14,6 +15,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/ask" && request.method === "POST") {
       return handleAsk(request, env);
+    }
+    if (url.pathname === "/models" && request.method === "GET") {
+      return listModels(env);
     }
 
     return new Response("Xroga AI Assistant Worker is running", { status: 200 });
@@ -48,13 +52,15 @@ async function handleAsk(request, env) {
 async function generateWithGemini(message, apiKey) {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
+  // List of models from your free tier list (March 2026)
+  // Ordered by preference: stable, fast, then powerful fallbacks
   const models = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3.1-pro-preview",
+    "gemini-2.5-flash",              // Best price-performance, fast, reasoning
+    "gemini-2.5-flash-lite",         // Fastest, most budget-friendly
+    "gemini-2.5-pro",                // Advanced reasoning and coding
+    "gemini-3-flash-preview",        // Frontier-class with fast speed (preview)
+    "gemini-3.1-flash-lite-preview", // High-volume workhorse (preview)
+    "gemini-3.1-pro-preview",        // Highly intelligent reasoning (preview)
   ];
 
   const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
@@ -101,4 +107,18 @@ async function generateWithGemini(message, apiKey) {
   }
 
   throw new Error(`All models failed. Last error: ${lastError}`);
+}
+
+async function listModels(env) {
+  const apiKey = env.GEMINI_API_KEY;
+  if (!apiKey) return new Response("GEMINI_API_KEY not set", { status: 500 });
+  try {
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await resp.json();
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    return new Response(`Error: ${err.message}`, { status: 500 });
+  }
 }
