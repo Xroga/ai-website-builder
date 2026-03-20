@@ -63,10 +63,11 @@
   </div>
 
   <script>
+    // Initialize Lucide icons
     lucide.createIcons();
 
-    // IMPORTANT: Replace this URL with your actual Worker URL after deployment
-    const API_BASE = "https://ai-website-builder.evanderthorne-help.workers.dev";
+    // Replace this with your actual Cloudflare Worker URL after deployment
+    const API_BASE = "https://your-worker-name.your-subdomain.workers.dev";
 
     async function createSite(domainAction, domainName) {
       const prompt = document.getElementById('prompt').value;
