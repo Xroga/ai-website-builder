@@ -13,33 +13,24 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (url.pathname === "/create-site" && request.method === "POST") {
-      return handleCreateSite(request, env);
+    if (url.pathname === "/ask" && request.method === "POST") {
+      return handleAsk(request, env);
     }
-    return new Response("Xroga AI Worker is running", { status: 200 });
+
+    return new Response("Xroga AI Assistant Worker is running", { status: 200 });
   },
 };
 
-async function handleCreateSite(request, env) {
+async function handleAsk(request, env) {
   try {
-    const { prompt, domainAction, domainName } = await request.json();
-
-    // 1. Generate code from Gemini
-    const generatedCode = await generateWithGemini(prompt, env.GEMINI_API_KEY);
-
-    // 2. Deploy to Railway (mock)
-    const railwayUrl = await deployToRailway(generatedCode, env.RAILWAY_API_TOKEN);
-
-    // 3. Handle domain (mock)
-    let finalUrl = railwayUrl;
-    if (domainAction === "connect" && domainName) {
-      finalUrl = await connectDomain(domainName, railwayUrl, env.SPACESHIP_API_KEY);
-    } else if (domainAction === "buy" && domainName) {
-      finalUrl = await buyDomain(domainName, railwayUrl, env.SPACESHIP_API_KEY);
+    const { message } = await request.json();
+    if (!message) {
+      throw new Error("No message provided");
     }
 
-    // Return with CORS headers
-    return new Response(JSON.stringify({ success: true, url: finalUrl }), {
+    const reply = await generateWithGemini(message, env.GEMINI_API_KEY);
+
+    return new Response(JSON.stringify({ success: true, reply }), {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
@@ -58,30 +49,29 @@ async function handleCreateSite(request, env) {
 }
 
 /**
- * Generate website HTML using Google Gemini API.
- * Uses gemini-1.5-flash model.
+ * Call Gemini API with a user message and return the text response.
  */
-async function generateWithGemini(prompt, apiKey) {
+async function generateWithGemini(message, apiKey) {
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");
   }
 
-  const systemInstruction = `You are an expert web developer. Generate a complete, self-contained HTML/CSS/JS website based on the user's description. The website should be responsive, modern, and visually appealing. Return only the code inside a single HTML file, no extra explanation.`;
+  // Simple system prompt to make it act as a helpful assistant
+  const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
 
   const requestBody = {
     contents: [
       {
         parts: [
           { text: systemInstruction },
-          { text: `User request: ${prompt}` }
+          { text: `User: ${message}` }
         ]
       }
     ],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 4000,
+      maxOutputTokens: 1000,
       topP: 0.95,
-      topK: 40,
     },
   };
 
@@ -103,40 +93,6 @@ async function generateWithGemini(prompt, apiKey) {
 
   const data = await response.json();
   // The response structure: data.candidates[0].content.parts[0].text
-  let code = data.candidates[0].content.parts[0].text;
-  // Remove markdown code fences if present
-  code = code.replace(/```html/g, "").replace(/```/g, "").trim();
-  return code;
-}
-
-/**
- * Mock deployment to Railway.
- * Replace with actual Railway API calls when ready.
- */
-async function deployToRailway(htmlCode, railwayToken) {
-  console.log("Deploying to Railway (mock)");
-  // Simulate a unique project ID
-  const projectId = `mock-project-${Date.now()}`;
-  // In reality, you would upload the HTML code and get a real URL.
-  return `https://${projectId}.up.railway.app`;
-}
-
-/**
- * Mock connecting an existing domain via Spaceship.
- * Replace with actual Spaceship API calls when ready.
- */
-async function connectDomain(domain, railwayUrl, spaceshipKey) {
-  console.log(`Connecting ${domain} -> ${railwayUrl} (mock)`);
-  // In reality, you would update DNS records to point to Railway.
-  return `https://${domain}`;
-}
-
-/**
- * Mock buying a new domain via Spaceship.
- * Replace with actual Spaceship API calls when ready.
- */
-async function buyDomain(domain, railwayUrl, spaceshipKey) {
-  console.log(`Buying ${domain} and pointing to ${railwayUrl} (mock)`);
-  // In reality, you would purchase the domain and set DNS.
-  return `https://${domain}`;
+  const reply = data.candidates[0].content.parts[0].text;
+  return reply;
 }
