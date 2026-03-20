@@ -16,7 +16,7 @@ export default {
     if (url.pathname === "/ask" && request.method === "POST") {
       return handleAsk(request, env);
     }
-    // Optional: add an endpoint to list models (for debugging)
+    // Optional: list available models for debugging
     if (url.pathname === "/models" && request.method === "GET") {
       return listModels(env);
     }
@@ -52,19 +52,16 @@ async function handleAsk(request, env) {
   }
 }
 
-/**
- * Try multiple Gemini models in order until one works.
- */
 async function generateWithGemini(message, apiKey) {
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");
   }
 
-  // List of models to try (in order of preference)
+  // Ordered list of models to try (from your provided list)
   const models = [
-    "gemini-1.5-pro",
-    "gemini-1.0-pro",
-    "gemini-pro"
+    "gemini-2.5-flash-preview",  // Gemini 2.5 Flash
+    "gemini-1.5-pro",            // stable alternative
+    "gemini-1.0-pro",            // older fallback
   ];
 
   const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
@@ -92,9 +89,7 @@ async function generateWithGemini(message, apiKey) {
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
         }
       );
@@ -104,7 +99,6 @@ async function generateWithGemini(message, apiKey) {
         return data.candidates[0].content.parts[0].text;
       }
 
-      // If response is not OK, capture error and continue
       const errorText = await response.text();
       lastError = `Model ${model} failed: ${response.status} - ${errorText}`;
       console.warn(lastError);
@@ -117,9 +111,6 @@ async function generateWithGemini(message, apiKey) {
   throw new Error(`All models failed. Last error: ${lastError}`);
 }
 
-/**
- * Helper endpoint to list available models (useful for debugging)
- */
 async function listModels(env) {
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) {
