@@ -1,11 +1,28 @@
 // worker/index.js
 export default {
   async fetch(request, env, ctx) {
+    // Handle CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "https://ai-website-builder-3lu.pages.dev", // restrict to your frontend
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+        },
+      });
+    }
+
     const url = new URL(request.url);
     if (url.pathname === "/create-site" && request.method === "POST") {
       return handleCreateSite(request, env);
     }
-    return new Response("Xroga AI Worker is running", { status: 200 });
+
+    return new Response("Xroga AI Worker is running", {
+      status: 200,
+      headers: { "Access-Control-Allow-Origin": "https://ai-website-builder-3lu.pages.dev" },
+    });
   },
 };
 
@@ -16,7 +33,7 @@ async function handleCreateSite(request, env) {
     // 1. Generate code from DeepSeek
     const generatedCode = await generateWithDeepSeek(prompt, env.DEEPSEEK_API_KEY);
 
-    // 2. Deploy to Railway (mock for now)
+    // 2. Deploy to Railway (mock)
     const railwayUrl = await deployToRailway(generatedCode, env.RAILWAY_API_TOKEN);
 
     // 3. Handle domain (mock)
@@ -28,17 +45,24 @@ async function handleCreateSite(request, env) {
     }
 
     return new Response(JSON.stringify({ success: true, url: finalUrl }), {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://ai-website-builder-3lu.pages.dev",
+      },
     });
   } catch (err) {
     console.error(err);
     return new Response(JSON.stringify({ success: false, error: err.message }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://ai-website-builder-3lu.pages.dev",
+      },
     });
   }
 }
 
+// --- The rest of your helper functions stay exactly the same ---
 async function generateWithDeepSeek(prompt, apiKey) {
   const systemPrompt = `You are an expert web developer. Generate a complete, self-contained HTML/CSS/JS website based on the user's description. The website should be responsive, modern, and visually appealing. Return only the code inside a single HTML file, no extra explanation.`;
 
@@ -71,7 +95,6 @@ async function generateWithDeepSeek(prompt, apiKey) {
 }
 
 async function deployToRailway(htmlCode, railwayToken) {
-  // Mock implementation – replace with real Railway API calls later
   console.log("Deploying to Railway (mock)");
   const projectId = `mock-project-${Date.now()}`;
   return `https://${projectId}.up.railway.app`;
