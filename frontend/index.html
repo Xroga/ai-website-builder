@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xroga AI - Website Builder</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .glass-card {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .btn-gradient {
+      background: linear-gradient(135deg, #6e8efb, #a777e3);
+      transition: all 0.3s ease;
+    }
+    .btn-gradient:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+  <div class="glass-card p-8 max-w-2xl w-full text-white">
+    <div class="flex items-center justify-center mb-6">
+      <i data-lucide="sparkles" class="w-10 h-10 mr-2"></i>
+      <h1 class="text-4xl font-bold">Xroga AI</h1>
+    </div>
+    <p class="text-center mb-6 text-lg">Generate your website with AI in seconds</p>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-2">Describe your dream website</label>
+      <textarea id="prompt" rows="5" class="w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50" placeholder="e.g., A personal portfolio for a photographer named Alex, with a gallery, about me section, and contact form..."></textarea>
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-sm font-medium mb-2">Domain (optional)</label>
+      <input type="text" id="domain" class="w-full p-3 rounded-lg bg-white/20 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50" placeholder="yourdomain.com">
+      <div class="flex gap-3 mt-3">
+        <button onclick="connectDomain()" class="flex-1 btn-gradient py-2 rounded-lg flex items-center justify-center gap-2">
+          <i data-lucide="link" class="w-5 h-5"></i> Connect existing
+        </button>
+        <button onclick="buyDomain()" class="flex-1 btn-gradient py-2 rounded-lg flex items-center justify-center gap-2">
+          <i data-lucide="shopping-cart" class="w-5 h-5"></i> Buy new
+        </button>
+      </div>
+    </div>
+
+    <button onclick="createSite()" class="w-full btn-gradient py-3 rounded-lg font-semibold flex items-center justify-center gap-2">
+      <i data-lucide="rocket" class="w-5 h-5"></i> Create Website
+    </button>
+
+    <div id="result" class="mt-6 p-4 rounded-lg bg-white/10 text-center hidden"></div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    // IMPORTANT: Replace this URL with your actual Worker URL after deployment
+    const API_BASE = "https://ai-website-worker.your-subdomain.workers.dev";
+
+    async function createSite(domainAction, domainName) {
+      const prompt = document.getElementById('prompt').value;
+      if (!prompt) {
+        alert('Please describe your website');
+        return;
+      }
+      const domain = document.getElementById('domain').value;
+      const resultDiv = document.getElementById('result');
+      resultDiv.classList.remove('hidden');
+      resultDiv.innerHTML = '<i data-lucide="loader-circle" class="animate-spin inline-block mr-2"></i> Generating your website...';
+      lucide.createIcons();
+
+      try {
+        const response = await fetch(`${API_BASE}/create-site`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            domainAction,
+            domainName: domain || undefined
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          resultDiv.innerHTML = `<i data-lucide="check-circle"></i> Your site is ready! <a href="${data.url}" target="_blank" class="underline">${data.url}</a>`;
+        } else {
+          resultDiv.innerHTML = `<i data-lucide="alert-circle"></i> Error: ${data.error}`;
+        }
+        lucide.createIcons();
+      } catch (err) {
+        resultDiv.innerHTML = `<i data-lucide="alert-circle"></i> Network error: ${err.message}`;
+      }
+    }
+
+    function connectDomain() { createSite('connect'); }
+    function buyDomain() { createSite('buy'); }
+  </script>
+</body>
+</html>
