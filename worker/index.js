@@ -50,13 +50,13 @@ async function handleAsk(request, env) {
 
 /**
  * Call Gemini API with a user message and return the text response.
+ * Uses stable model "gemini-pro" to avoid 404 errors.
  */
 async function generateWithGemini(message, apiKey) {
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set");
   }
 
-  // Simple system prompt to make it act as a helpful assistant
   const systemInstruction = `You are a helpful, friendly AI assistant. Answer the user's question in a concise but thorough manner.`;
 
   const requestBody = {
@@ -75,8 +75,10 @@ async function generateWithGemini(message, apiKey) {
     },
   };
 
+  // Use the stable model "gemini-pro"
+  const model = "gemini-pro";
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: {
