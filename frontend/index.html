@@ -1,192 +1,2163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Assistant | Xroga</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    .glass-card {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 1.5rem;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-    }
-    .gradient-bg {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    .message-user {
-      background: linear-gradient(135deg, #6e8efb, #a777e3);
-      color: white;
-      border-radius: 1rem 1rem 0.25rem 1rem;
-    }
-    .message-bot {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(4px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white;
-      border-radius: 1rem 1rem 1rem 0.25rem;
-    }
-    .typing-indicator span {
-      background-color: white;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-      animation: bounce 1.4s infinite ease-in-out both;
-      margin: 0 2px;
-    }
-    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
-    }
-    .chat-container::-webkit-scrollbar {
-      width: 6px;
-    }
-    .chat-container::-webkit-scrollbar-track {
-      background: rgba(255,255,255,0.1);
-      border-radius: 10px;
-    }
-    .chat-container::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.3);
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
-  <div class="glass-card w-full max-w-3xl h-[80vh] flex flex-col overflow-hidden">
-    <div class="p-4 border-b border-white/20 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <i data-lucide="bot" class="w-8 h-8 text-white"></i>
-        <h1 class="text-2xl font-bold text-white">Xroga AI Assistant</h1>
-      </div>
-      <button onclick="clearChat()" class="text-white/70 hover:text-white transition">
-        <i data-lucide="trash-2" class="w-5 h-5"></i>
-      </button>
-    </div>
-
-    <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container">
-      <div class="flex justify-start">
-        <div class="message-bot max-w-[80%] p-3">
-          <p>👋 Hello! I'm your AI assistant. Ask me anything—I'm here to help!</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="p-4 border-t border-white/20">
-      <div class="flex gap-3">
-        <input type="text" id="userInput" placeholder="Type your question..." 
-               class="flex-1 p-3 rounded-xl bg-white/10 text-white placeholder-white/50 border border-white/30 focus:outline-none focus:ring-2 focus:ring-white/50">
-        <button onclick="sendMessage()" id="sendButton" class="btn-gradient px-5 py-2 rounded-xl flex items-center gap-2">
-          <i data-lucide="send" class="w-5 h-5"></i>
-          <span class="hidden sm:inline">Send</span>
-        </button>
-      </div>
-      <p class="text-xs text-white/50 mt-2 text-center">Powered by Gemini AI</p>
-    </div>
-  </div>
-
-  <script>
-    lucide.createIcons();
-
-    // Update this URL to your actual worker URL if it changes
-    const API_BASE = "https://ai-website-builder.evanderthorne-help.workers.dev";
-    let isWaiting = false;
-
-    function addMessage(content, isUser) {
-      const messagesDiv = document.getElementById('chatMessages');
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
-      messageDiv.innerHTML = `
-        <div class="${isUser ? 'message-user' : 'message-bot'} max-w-[80%] p-3">
-          <p class="whitespace-pre-wrap">${escapeHtml(content)}</p>
-        </div>
-      `;
-      messagesDiv.appendChild(messageDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function showTyping() {
-      const messagesDiv = document.getElementById('chatMessages');
-      const typingDiv = document.createElement('div');
-      typingDiv.id = 'typingIndicator';
-      typingDiv.className = 'flex justify-start';
-      typingDiv.innerHTML = `
-        <div class="message-bot max-w-[80%] p-3 flex items-center gap-1">
-          <div class="typing-indicator flex">
-            <span></span><span></span><span></span>
-          </div>
-          <span class="text-sm ml-1">AI is thinking...</span>
-        </div>
-      `;
-      messagesDiv.appendChild(typingDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-
-    function hideTyping() {
-      const typing = document.getElementById('typingIndicator');
-      if (typing) typing.remove();
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    async function sendMessage() {
-      const input = document.getElementById('userInput');
-      const message = input.value.trim();
-      if (!message || isWaiting) return;
-
-      addMessage(message, true);
-      input.value = '';
-      input.focus();
-
-      showTyping();
-      isWaiting = true;
-
-      try {
-        const response = await fetch(`${API_BASE}/ask`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message })
-        });
-        const data = await response.json();
-        hideTyping();
-        if (data.success) {
-          addMessage(data.reply, false);
-        } else {
-          addMessage(`Error: ${data.error}`, false);
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Xroga AI · See Magic</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a'
+                        },
+                        secondary: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'slide-down': 'slideDown 0.3s ease-out',
+                        'slide-left': 'slideLeft 0.3s ease-out',
+                        'slide-right': 'slideRight 0.3s ease-out',
+                        'pulse-slow': 'pulse 3s infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                        'bounce-subtle': 'bounceSubtle 2s infinite',
+                        'shimmer': 'shimmer 2s infinite',
+                        'typing': 'typing 1.5s steps(20) infinite',
+                        'wave': 'wave 1.5s ease-in-out infinite',
+                        'gradient': 'gradient 3s ease infinite',
+                        'spin-slow': 'spin 3s linear infinite',
+                        'glow-pulse': 'glowPulse 3s ease-in-out infinite'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideDown: {
+                            '0%': { transform: 'translateY(-20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideLeft: {
+                            '0%': { transform: 'translateX(20px)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' }
+                        },
+                        slideRight: {
+                            '0%': { transform: 'translateX(-20px)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' }
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        bounceSubtle: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-5px)' }
+                        },
+                        shimmer: {
+                            '0%': { backgroundPosition: '-1000px 0' },
+                            '100%': { backgroundPosition: '1000px 0' }
+                        },
+                        typing: {
+                            '0%': { width: '0' },
+                            '100%': { width: '100%' }
+                        },
+                        wave: {
+                            '0%, 100%': { transform: 'scaleY(1)' },
+                            '50%': { transform: 'scaleY(1.5)' }
+                        },
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' }
+                        },
+                        glowPulse: {
+                            '0%, 100%': { opacity: 0.6, filter: 'blur(30px)' },
+                            '50%': { opacity: 1, filter: 'blur(40px)' }
+                        }
+                    }
+                }
+            }
         }
-      } catch (err) {
-        hideTyping();
-        addMessage(`Network error: ${err.message}`, false);
-      } finally {
-        isWaiting = false;
-      }
-    }
+    </script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Additional libraries for markdown, highlighting, and sanitisation -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dark .glass {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+        .dark .glass-panel {
+            background: rgba(10, 10, 25, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradient 3s ease infinite;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 30%, rgba(130, 100, 255, 0.4) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(255, 100, 200, 0.3) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+            animation: glowPulse 8s ease-in-out infinite;
+        }
+        .message-enter {
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 20px;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #3b82f6;
+            border-radius: 50%;
+            animation: typingDot 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
+        @keyframes typingDot {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        .user-message {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border-radius: 20px 20px 4px 20px;
+        }
+        .ai-message {
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .dark .ai-message {
+            background: rgba(30, 30, 50, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .chat-item.pinned {
+            border-left: 4px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+        .dark .chat-item.pinned {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .upload-progress {
+            height: 4px;
+            background: rgba(59, 130, 246, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .upload-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #2563eb);
+            animation: shimmer 2s infinite;
+        }
+        @media (max-width: 768px) {
+            .mobile-stack { flex-direction: column !important; }
+            .mobile-full { width: 100% !important; max-width: 100% !important; }
+            .mobile-p-2 { padding: 0.5rem !important; }
+            .mobile-text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+            .mobile-hidden { display: none !important; }
+            .mobile-block { display: block !important; }
+            #chat-input { font-size: 16px !important; }
+        }
+        .context-menu { min-width: 200px; animation: slideDown 0.2s ease-out; }
+        ::selection { background: rgba(59, 130, 246, 0.3); }
+        * { transition: background-color 0.3s ease, border-color 0.3s ease; }
+        @keyframes logoGlow {
+            0%, 100% { filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.5)); }
+            50% { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.8)); }
+        }
+        .logo-glow { animation: logoGlow 3s ease-in-out infinite; }
+        .file-preview {
+            border: 2px dashed rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        .file-preview:hover { border-color: #3b82f6; background: rgba(59, 130, 246, 0.05); }
+        .code-block {
+            font-family: 'Courier New', monospace;
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+        .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+        .toast-enter { animation: slideUp 0.3s ease-out forwards; }
+        .topic-chip {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .topic-chip:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        .dark .topic-chip:hover { box-shadow: 0 8px 25px rgba(255, 255, 255, 0.05); }
+        .chat-dropdown {
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+        }
+        .dropdown-item { transition: all 0.2s ease; }
+        .dropdown-item:hover { transform: translateX(2px); }
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .gradient-btn {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
+            background-size: 200% 200%;
+            animation: gradient 3s ease infinite;
+            color: white;
+            border: none;
+        }
+        .gradient-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .main-content-expanded { margin-left: 0 !important; }
+        .lg\:ml-72 { margin-left: 18rem; }
+        .code-block-wrapper {
+            background: rgba(20, 30, 45, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .code-toolbar { border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .code-toolbar .glass-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+        }
+        .badge-pro {
+            background: rgba(255, 215, 0, 0.2);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 30px;
+            padding: 0.1rem 0.5rem;
+            font-size: 0.6rem;
+            color: #ffd966;
+            font-weight: 600;
+            margin-left: 0.2rem;
+        }
+        .code-output {
+            background: rgba(0, 0, 0, 0.3);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #d4d4d4;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-950 text-gray-900 dark:text-gray-100 antialiased">
+    <div class="flex h-screen overflow-hidden glass-panel m-4 rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/30">
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 lg:hidden hidden"></div>
+        
+        <aside id="sidebar" class="w-72 bg-white/30 dark:bg-gray-800/50 backdrop-blur-xl border-r border-white/30 dark:border-gray-700/30 flex flex-col h-full fixed lg:absolute lg:left-0 lg:top-0 lg:h-full z-50 transform -translate-x-full transition-transform duration-300 ease-in-out">
+            <div class="p-4 md:p-6 border-b border-white/30 dark:border-gray-700/30">
+                <div class="flex items-center gap-8 mb-9">
+                    <div class="relative logo-glow">
+                        <img src="https://i.postimg.cc/TPjDXhy8/Green-Minimalist-Summer-Big-Sale-Medium-Banner-7-removebg-preview.png" alt="Xroga AI" class="h-20 w-40">
+                    </div>
+                </div>
+                <button id="new-chat" class="w-full gradient-btn py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 shadow-lg hover:shadow-xl active:scale-[0.98]">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span class="font-semibold">New Chat</span>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="relative mb-6">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                    <input type="text" id="search-chats" placeholder="Search chats..." class="search-input w-full pl-10 pr-4 py-2.5 bg-white/30 dark:bg-gray-700/50 border border-white/30 dark:border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm backdrop-blur-sm">
+                </div>
+                <div id="chat-list" class="space-y-1"></div>
+            </div>
+            
+            <div class="p-4 border-t border-white/30 dark:border-gray-700/30 space-y-2">
+                <button id="toggle-tasks-btn" class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-all duration-200">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/30 dark:bg-gray-700/50 rounded-lg">
+                            <i data-lucide="list-todo" class="w-4 h-4"></i>
+                        </div>
+                        <span class="font-medium">Tasks</span>
+                    </div>
+                    <i data-lucide="chevron-up" class="w-4 h-4 transition-transform" id="tasks-chevron"></i>
+                </button>
+                <div id="tasks-panel" class="space-y-2 hidden">
+                    <div class="flex gap-2">
+                        <input type="text" id="task-input" placeholder="New task..." class="flex-1 p-2 bg-white/30 dark:bg-gray-700/50 rounded-xl text-sm">
+                        <button id="add-task-btn" class="p-2 bg-primary-500/30 rounded-xl"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="tasks-list" class="space-y-1 max-h-40 overflow-y-auto"></div>
+                </div>
 
-    function clearChat() {
-      const messagesDiv = document.getElementById('chatMessages');
-      messagesDiv.innerHTML = `
-        <div class="flex justify-start">
-          <div class="message-bot max-w-[80%] p-3">
-            <p>👋 Hello! I'm your AI assistant. Ask me anything—I'm here to help!</p>
-          </div>
+                <button id="theme-toggle" class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-all duration-200 active:scale-[0.98]">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/30 dark:bg-gray-700/50 rounded-lg">
+                            <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+                            <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+                        </div>
+                        <span class="font-medium">Theme</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 bg-white/30 dark:bg-gray-700/50 rounded-md">
+                        <span class="dark:hidden">Light</span>
+                        <span class="hidden dark:inline">Dark</span>
+                    </span>
+                </button>
+                
+                <div id="user-info" class="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-primary-500/20 to-purple-500/20 dark:from-primary-900/30 dark:to-purple-900/30 backdrop-blur-sm mb-2">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-primary-500/30 dark:bg-primary-900/30 rounded-lg">
+                            <i data-lucide="user" class="w-4 h-4 text-primary-600 dark:text-primary-400"></i>
+                        </div>
+                        <div>
+                            <p class="font-semibold text-sm" id="sidebar-username">Guest</p>
+                            <p class="text-xs text-gray-600 dark:text-gray-400" id="sidebar-status">Not logged in</p>
+                        </div>
+                    </div>
+                    <button id="logout-btn" class="text-xs px-2 py-1 bg-white/30 dark:bg-gray-700/50 rounded-md hidden">Logout</button>
+                </div>
+                <div class="p-4 border-t border-white/30 dark:border-gray-700/30">
+                    <button id="login-show-btn" class="w-full gradient-btn py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 shadow-lg hover:shadow-xl active:scale-[0.98]">
+                        <i data-lucide="log-in" class="w-5 h-5"></i>
+                        <span class="font-semibold">Sign In / Register</span>
+                    </button>
+                </div>
+                
+                <button id="settings-btn" class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-all duration-200 active:scale-[0.98]">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-white/30 dark:bg-gray-700/50 rounded-lg">
+                            <i data-lucide="settings" class="w-4 h-4"></i>
+                        </div>
+                        <span class="font-medium">Settings</span>
+                    </div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+                </button>
+            </div>
+        </aside>
+        
+        <main id="main-content" class="flex-1 flex flex-col h-full overflow-hidden">
+            <header class="lg:hidden p-4 border-b border-white/30 dark:border-gray-700/30 bg-white/30 dark:bg-gray-800/50 backdrop-blur-lg">
+                <div class="flex items-center justify-between">
+                    <button id="mobile-menu-btn" class="p-2 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <div class="w-30 h-20 rounded-lg overflow-hidden">
+                            <img src="https://i.postimg.cc/TPjDXhy8/Green-Minimalist-Summer-Big-Sale-Medium-Banner-7-removebg-preview.png" alt="Xroga AI" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                    <button id="mobile-theme-toggle" class="p-2 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors">
+                        <i data-lucide="sun" class="w-5 h-5 block dark:hidden"></i>
+                        <i data-lucide="moon" class="w-5 h-5 hidden dark:block"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div id="desktop-toggle-container" class="hidden lg:block absolute top-10 left-30 z-[100]">
+                <button id="desktop-sidebar-toggle" class="p-2 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Toggle sidebar">
+                    <i data-lucide="panel-left-close" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <header id="main-header" class="p-4 md:p-6 border-b border-white/30 dark:border-gray-700/30 bg-white/30 dark:bg-gray-800/50 backdrop-blur-lg transition-all duration-300">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="flex-1 min-w-0">
+                            <h1 class="text-2xl md:text-3xl font-bold gradient-text">Welcome back, <span id="username" class="gradient-text">Alex</span></h1>
+                            <p class="text-gray-700 dark:text-gray-300 mt-1">Your AI Partner is ready to help</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 mobile-hidden">
+                        <button id="clear-chat" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Clear chat">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                        <button id="export-chat" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Export chat">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="quick-action px-4 py-2.5 bg-primary-500/20 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-xl hover:bg-primary-500/30 dark:hover:bg-primary-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        <span>Generate content</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-green-500/20 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-xl hover:bg-green-500/30 dark:hover:bg-green-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm">
+                        <i data-lucide="code" class="w-4 h-4"></i>
+                        <span>Write code</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-purple-500/20 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-xl hover:bg-purple-500/30 dark:hover:bg-purple-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm">
+                        <i data-lucide="brain" class="w-4 h-4"></i>
+                        <span>Analyze data</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-blue-500/20 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-xl hover:bg-blue-500/30 dark:hover:bg-blue-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm" data-feature="knowledge">
+                        <i data-lucide="book-open" class="w-4 h-4"></i>
+                        <span>Knowledge</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-orange-500/20 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-xl hover:bg-orange-500/30 dark:hover:bg-orange-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm" data-feature="daily">
+                        <i data-lucide="list-todo" class="w-4 h-4"></i>
+                        <span>Daily Task</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-yellow-500/20 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-xl hover:bg-yellow-500/30 dark:hover:bg-yellow-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm" data-feature="boost">
+                        <i data-lucide="sun" class="w-4 h-4"></i>
+                        <span>Boost My Day</span>
+                    </button>
+                    <button class="quick-action px-4 py-2.5 bg-pink-500/20 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-xl hover:bg-pink-500/30 dark:hover:bg-pink-800/40 transition-all duration-200 active:scale-[0.95] flex items-center gap-2 backdrop-blur-sm" data-feature="trip">
+                        <i data-lucide="plane" class="w-4 h-4"></i>
+                        <span>Trip Plan</span>
+                    </button>
+                </div>
+            </header>
+            
+            <div id="topics-toggle-container" class="hidden px-4 md:px-6 py-3 border-b border-white/30 dark:border-gray-700/30 bg-gradient-to-r from-primary/10 to-purple-500/10 dark:from-primary/5 dark:to-purple-500/5">
+                <button id="toggle-topics-btn" class="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors">
+                    <i data-lucide="chevron-down" class="w-4 h-4 transition-transform" id="topics-chevron"></i>
+                    <span>Show Topics</span>
+                </button>
+            </div>
+
+            <div id="topics-section" class="hidden p-4 md:p-6 border-b border-white/30 dark:border-gray-700/30 bg-gradient-to-r from-primary/10 to-purple-500/10 dark:from-primary/5 dark:to-purple-500/5">
+                <div class="mb-4">
+                    <h3 class="text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="compass" class="w-5 h-5 text-primary-600 dark:text-primary-400"></i>
+                        Explore Topics
+                    </h3>
+                    <p class="text-gray-700 dark:text-gray-300 text-sm mt-1">Select a topic to start a focused conversation</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-primary/30 dark:border-primary/50 text-primary-600 dark:text-primary-400 rounded-full hover:bg-primary/20 dark:hover:bg-primary/30 transition-all backdrop-blur-sm" data-topic="website" data-description="Build modern websites and web applications">
+                        Website Development
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-green-500/30 dark:border-green-500/50 text-green-600 dark:text-green-400 rounded-full hover:bg-green-500/20 dark:hover:bg-green-500/30 transition-all backdrop-blur-sm" data-topic="mobile" data-description="Create mobile apps for iOS and Android">
+                        Mobile App Design
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-purple-500/30 dark:border-purple-500/50 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-500/20 dark:hover:bg-purple-500/30 transition-all backdrop-blur-sm" data-topic="content" data-description="Write articles, blogs, and marketing content">
+                        Content Writing
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-orange-500/30 dark:border-orange-500/50 text-orange-600 dark:text-orange-400 rounded-full hover:bg-orange-500/20 dark:hover:bg-orange-500/30 transition-all backdrop-blur-sm" data-topic="business" data-description="Develop business strategies and plans">
+                        Business Strategy
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-red-500/30 dark:border-red-500/50 text-red-600 dark:text-red-400 rounded-full hover:bg-red-500/20 dark:hover:bg-red-500/30 transition-all backdrop-blur-sm" data-topic="code" data-description="Review and optimize your code">
+                        Code Review
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-blue-500/30 dark:border-blue-500/50 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-500/20 dark:hover:bg-blue-500/30 transition-all backdrop-blur-sm" data-topic="knowledge" data-description="Explore vast knowledge base">
+                        Knowledge
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-orange-500/30 dark:border-orange-500/50 text-orange-600 dark:text-orange-400 rounded-full hover:bg-orange-500/20 dark:hover:bg-orange-500/30 transition-all backdrop-blur-sm" data-topic="daily" data-description="Manage daily tasks effectively">
+                        Daily Task
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-yellow-500/30 dark:border-yellow-500/50 text-yellow-600 dark:text-yellow-400 rounded-full hover:bg-yellow-500/20 dark:hover:bg-yellow-500/30 transition-all backdrop-blur-sm" data-topic="boost" data-description="Get motivation and energy">
+                        Boost My Day
+                    </button>
+                    <button class="topic-chip text-sm px-4 py-2 bg-white/40 dark:bg-gray-800/40 border border-pink-500/30 dark:border-pink-500/50 text-pink-600 dark:text-pink-400 rounded-full hover:bg-pink-500/20 dark:hover:bg-pink-500/30 transition-all backdrop-blur-sm" data-topic="trip" data-description="Plan your perfect trip">
+                        Trip Plan
+                    </button>
+                </div>
+            </div>
+            
+            <div id="chat-container" class="flex-1 overflow-y-auto relative">
+                <div id="file-upload-preview" class="hidden mx-4 md:mx-6 mt-4"></div>
+                <div id="chat-messages" class="p-4 md:p-6 space-y-6 pb-32 lg:pt-16">
+                    <div class="flex flex-col items-center justify-center text-center max-w-4xl mx-auto py-8">
+                        <div class="relative mb-6">
+                            <div class="w-20 h-20 rounded-full overflow-hidden mx-auto">
+                                <img src="https://i.postimg.cc/Sj09h9Gq/Untitled-design-(64).png" alt="Xroga AI" class="w-full h-full object-cover">
+                            </div>
+                        </div> 
+                        <h2 class="text-4xl md:text-5xl font-bold gradient-text mb-4">Xroga AI</h2>
+                        <div class="inline-flex items-center gap-2 mb-6">
+                            <span class="px-4 py-2 bg-primary-500/20 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium backdrop-blur-sm">Ready To Build your Future!</span>
+                        </div>
+                        <p class="text-xl md:text-2xl text-gray-800 dark:text-gray-200 mb-8 max-w-2xl">
+                            Hello <span id="username-in-chat" class="font-semibold gradient-text">Akram</span>!<br>What can I help you with today?
+                        </p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-4">
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Build a website for '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors">
+                                        <i data-lucide="globe" class="w-8 h-8 text-blue-600 dark:text-blue-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Website Build</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Plan a trip to '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-colors">
+                                        <i data-lucide="plane" class="w-8 h-8 text-green-600 dark:text-green-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Travel Plan</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Give me productivity tips for '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-colors">
+                                        <i data-lucide="zap" class="w-8 h-8 text-orange-600 dark:text-orange-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Boost Productivity</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Fix this code: '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-red-500/20 rounded-xl group-hover:bg-red-500/30 transition-colors">
+                                        <i data-lucide="code" class="w-8 h-8 text-red-600 dark:text-red-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Fix Code</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Help me debug: '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-colors">
+                                        <i data-lucide="bug" class="w-8 h-8 text-purple-600 dark:text-purple-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Improve Bugs</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Solve this complex problem: '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-yellow-500/20 rounded-xl group-hover:bg-yellow-500/30 transition-colors">
+                                        <i data-lucide="brain" class="w-8 h-8 text-yellow-600 dark:text-yellow-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Complex Problems</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Draft an email about '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-pink-500/20 rounded-xl group-hover:bg-pink-500/30 transition-colors">
+                                        <i data-lucide="mail" class="w-8 h-8 text-pink-600 dark:text-pink-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Write Email</span>
+                                </div>
+                            </div>
+                            <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Write copy for '; document.getElementById('chat-input').focus();">
+                                <div class="flex flex-col items-center text-center gap-3">
+                                    <div class="p-3 bg-indigo-500/20 rounded-xl group-hover:bg-indigo-500/30 transition-colors">
+                                        <i data-lucide="pencil" class="w-8 h-8 text-indigo-600 dark:text-indigo-400"></i>
+                                    </div>
+                                    <span class="font-semibold text-sm">Copywriting</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="typing-indicator" class="hidden absolute bottom-32 left-4 md:left-6">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+                            <img src="https://i.postimg.cc/Jn1KffzY/Untitled-design-63-removebg-preview.png" alt="Xroga AI" class="w-full h-full object-cover">
+                        </div>
+                        <div class="typing-indicator glass">
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                            <div class="typing-dot"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="border-t border-white/30 dark:border-gray-700/30 bg-white/30 dark:bg-gray-800/50 backdrop-blur-lg p-4">
+                <div class="max-w-4xl mx-auto">
+                    <div class="glass rounded-2xl p-2 shadow-2xl">
+                        <div class="flex items-center">
+                            <div class="flex items-center gap-1 pl-2">
+                                <div class="relative">
+                                    <button id="book-btn" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="All Topics">
+                                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                                    </button>
+                                    <div id="topics-modal" class="hidden absolute bottom-full left-0 mb-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl shadow-2xl rounded-xl border border-white/30 dark:border-gray-700/30 animate-slide-up min-w-[280px] max-h-[400px] overflow-y-auto z-50">
+                                        <div class="p-4">
+                                            <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+                                                <i data-lucide="layers" class="w-5 h-5 text-primary-600"></i>
+                                                All Topics
+                                            </h3>
+                                            <div class="space-y-2">
+                                                <div class="topic-category">
+                                                    <h4 class="font-semibold text-sm mb-2 text-gray-500 dark:text-gray-400">Development</h4>
+                                                    <div class="space-y-1">
+                                                        <button class="topic-item w-full text-left px-3 py-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors" data-topic="web">
+                                                            <div class="flex items-center gap-2">
+                                                                <i data-lucide="globe" class="w-4 h-4 text-blue-500"></i>
+                                                                <span>Web Development</span>
+                                                            </div>
+                                                        </button>
+                                                        <button class="topic-item w-full text-left px-3 py-2 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors" data-topic="mobile">
+                                                            <div class="flex items-center gap-2">
+                                                                <i data-lucide="smartphone" class="w-4 h-4 text-green-500"></i>
+                                                                <span>Mobile Development</span>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="relative">
+                                    <button id="plus-btn" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Upload Files">
+                                        <i data-lucide="plus" class="w-5 h-5"></i>
+                                    </button>
+                                    <div id="plus-upload-menu" class="hidden absolute bottom-full left-0 mb-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl shadow-2xl rounded-xl border border-white/30 dark:border-gray-700/30 animate-slide-up min-w-[240px] z-50">
+                                        <div class="p-2">
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="image">
+                                                <div class="p-2 bg-blue-500/30 rounded-lg">
+                                                    <i data-lucide="image" class="w-4 h-4 text-blue-600 dark:text-blue-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Images</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">JPG, PNG, GIF, WebP</div>
+                                                </div>
+                                            </button>
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="file">
+                                                <div class="p-2 bg-green-500/30 rounded-lg">
+                                                    <i data-lucide="file" class="w-4 h-4 text-green-600 dark:text-green-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Files</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">PDF, DOC, TXT, XLS</div>
+                                                </div>
+                                            </button>
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="screenshot">
+                                                <div class="p-2 bg-purple-500/30 rounded-lg">
+                                                    <i data-lucide="camera" class="w-4 h-4 text-purple-600 dark:text-purple-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Screenshots</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">PNG, JPG screenshots</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="relative">
+                                    <button id="clip-btn" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Attach Files">
+                                        <i data-lucide="paperclip" class="w-5 h-5"></i>
+                                    </button>
+                                    <div id="clip-upload-menu" class="hidden absolute bottom-full left-0 mb-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl shadow-2xl rounded-xl border border-white/30 dark:border-gray-700/30 animate-slide-up min-w-[240px] z-50">
+                                        <div class="p-2">
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="code">
+                                                <div class="p-2 bg-orange-500/30 rounded-lg">
+                                                    <i data-lucide="code" class="w-4 h-4 text-orange-600 dark:text-orange-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Code Files</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">JS, PY, HTML, CSS, TS</div>
+                                                </div>
+                                            </button>
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="document">
+                                                <div class="p-2 bg-red-500/30 rounded-lg">
+                                                    <i data-lucide="file-text" class="w-4 h-4 text-red-600 dark:text-red-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Documents</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">DOCX, PDF, PPTX</div>
+                                                </div>
+                                            </button>
+                                            <button class="upload-option w-full text-left px-4 py-3 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-lg transition-colors flex items-center gap-3" data-type="archive">
+                                                <div class="p-2 bg-cyan-500/30 rounded-lg">
+                                                    <i data-lucide="folder" class="w-4 h-4 text-cyan-600 dark:text-cyan-400"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium">Upload Archives</div>
+                                                    <div class="text-xs text-gray-500 dark:text-gray-400">ZIP, RAR, TAR</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button id="voice-btn" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors relative" title="Voice Input">
+                                    <i data-lucide="mic" class="w-5 h-5"></i>
+                                    <div id="voice-indicator" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                </button>
+                                <button id="voice-output-btn" class="p-2.5 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Speak last response">
+                                    <i data-lucide="volume-2" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="flex-1 mx-2">
+                                <div class="relative">
+                                    <textarea 
+                                        id="chat-input"
+                                        rows="1"
+                                        placeholder="Ask Xroga AI..." 
+                                        class="w-full bg-transparent border-none focus:outline-none resize-none py-3 text-base placeholder-gray-500 dark:placeholder-gray-400 max-h-[120px]"
+                                        style="height: 48px;"
+                                    ></textarea>
+                                    <div class="absolute bottom-2 right-2 flex items-center gap-2">
+                                        <span id="char-count" class="text-xs text-gray-400">0/2000</span>
+                                        <button id="clear-input" class="p-1 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50">
+                                            <i data-lucide="x" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="pr-2">
+                                <button id="send-btn" class="gradient-btn p-3 rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl active:scale-[0.95] flex items-center gap-2">
+                                    <i data-lucide="send" class="w-5 h-5"></i>
+                                    <span class="font-medium mobile-hidden">Send</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-3 px-2">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <button id="language-btn" class="text-xs px-3 py-1.5 bg-white/30 dark:bg-gray-700/50 hover:bg-white/50 dark:hover:bg-gray-700/70 rounded-lg transition-colors flex items-center gap-2 backdrop-blur-sm">
+                                    <i data-lucide="code" class="w-3 h-3"></i>
+                                    <span>Languages</span>
+                                    <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                                </button>
+                                <div id="language-menu" class="hidden absolute bottom-full left-0 mb-2 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl shadow-2xl rounded-xl border border-white/30 dark:border-gray-700/30 animate-slide-up min-w-[200px] z-50">
+                                    <div class="p-3">
+                                        <h4 class="font-semibold text-sm mb-2">Supported Languages</h4>
+                                        <div class="grid grid-cols-2 gap-1">
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="javascript">JavaScript</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="python">Python</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="typescript">TypeScript</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="java">Java</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="cpp">C++</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="go">Go</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="rust">Rust</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="php">PHP</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="ruby">Ruby</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="swift">Swift</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="kotlin">Kotlin</button>
+                                            <button class="language-item text-xs px-2 py-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded text-left" data-lang="html">HTML/CSS</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                                Xroga can <kbd class="px-2 py-1 bg-white/30 dark:bg-gray-700/50 rounded text-xs backdrop-blur-sm">Mistake</kbd>
+                                <kbd class="px-2 py-1 bg-white/30 dark:bg-gray-700/50 rounded text-xs backdrop-blur-sm">No one perfect except ALLAH.</kbd>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="settings-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-fade-in border border-white/30 dark:border-gray-700/30">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold">Settings</h3>
+                <button id="close-settings" class="p-2 rounded-full hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <h4 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="user" class="w-4 h-4"></i>Profile Settings</h4>
+                    <input type="text" id="profile-name" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl" value="Alex">
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-4 flex items-center gap-2"><i data-lucide="mic" class="w-4 h-4"></i>Voice Output</h4>
+                    <label class="flex items-center gap-2"><input type="checkbox" id="auto-speak" checked> Auto‑speak responses</label>
+                </div>
+                <button id="save-settings" class="w-full py-3 gradient-btn rounded-xl">Save Changes</button>
+            </div>
         </div>
-      `;
-    }
+    </div>
 
-    document.getElementById('userInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendMessage();
-    });
-  </script>
+    <div id="login-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-fade-in border border-white/30 dark:border-gray-700/30">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex gap-4">
+                    <button id="login-tab" class="text-lg font-bold pb-2 border-b-2 border-primary-500 transition-colors">Login</button>
+                    <button id="register-tab" class="text-lg font-bold pb-2 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors">Register</button>
+                </div>
+                <button id="close-login-modal" class="p-2 rounded-full hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email</label>
+                    <input type="email" id="login-email" placeholder="your@email.com" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Password</label>
+                    <div class="relative">
+                        <input type="password" id="login-password" placeholder="••••••••" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-10">
+                        <button type="button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 show-password" data-target="login-password">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="remember-me" class="rounded bg-white/30 dark:bg-gray-700/50 border-white/30 dark:border-gray-600/50">
+                        <span class="text-sm">Remember me</span>
+                    </label>
+                    <button id="forgot-password" class="text-sm text-primary-600 dark:text-primary-400 hover:underline">Forgot password?</button>
+                </div>
+                <button id="login-btn" class="w-full py-3 gradient-btn rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
+                    <i data-lucide="log-in" class="w-5 h-5 inline mr-2"></i>Sign In
+                </button>
+            </div>
+            <div id="register-form" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Full Name</label>
+                    <input type="text" id="register-name" placeholder="John Doe" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email</label>
+                    <input type="email" id="register-email" placeholder="your@email.com" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Password</label>
+                    <div class="relative">
+                        <input type="password" id="register-password" placeholder="••••••••" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent pr-10">
+                        <button type="button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 show-password" data-target="register-password">
+                            <i data-lucide="eye" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <div class="password-strength bg-gray-300 dark:bg-gray-600"></div>
+                        <p class="text-xs mt-1 text-gray-500 dark:text-gray-400" id="password-strength-text">Enter a password</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Confirm Password</label>
+                    <input type="password" id="register-confirm" placeholder="••••••••" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                </div>
+                <label class="flex items-start gap-2">
+                    <input type="checkbox" id="terms" class="mt-1 rounded bg-white/30 dark:bg-gray-700/50 border-white/30 dark:border-gray-600/50">
+                    <span class="text-sm">I agree to the <a href="#" class="text-primary-600 dark:text-primary-400 hover:underline">Terms</a> and <a href="#" class="text-primary-600 dark:text-primary-400 hover:underline">Privacy</a></span>
+                </label>
+                <button id="register-btn" class="w-full py-3 gradient-btn rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl">
+                    <i data-lucide="user-plus" class="w-5 h-5 inline mr-2"></i>Create Account
+                </button>
+            </div>
+            <div class="relative my-6">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-white/30 dark:border-gray-700/30"></div></div>
+                <div class="relative flex justify-center text-sm"><span class="px-2 bg-white/70 dark:bg-gray-800/70 text-gray-500 dark:text-gray-400">Or continue with</span></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button id="google-login" class="social-btn flex items-center justify-center gap-2 p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/70">
+                    <img src="https://www.google.com/favicon.ico" alt="Google" class="w-5 h-5"><span class="text-sm font-medium">Google</span>
+                </button>
+                <button id="github-login" class="social-btn flex items-center justify-center gap-2 p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl hover:bg-white/50 dark:hover:bg-gray-700/70">
+                    <i data-lucide="github" class="w-5 h-5"></i><span class="text-sm font-medium">GitHub</span>
+                </button>
+            </div>
+            <div class="mt-4 text-center">
+                <button id="continue-as-guest" class="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400">Continue as guest</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="forgot-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl animate-fade-in border border-white/30 dark:border-gray-700/30">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Reset Password</h3>
+                <button id="close-forgot" class="p-2 rounded-full hover:bg-white/30 dark:hover:bg-gray-700/50"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Enter your email and we'll send you a reset link.</p>
+            <input type="email" id="forgot-email" placeholder="your@email.com" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl mb-4">
+            <button id="send-reset-btn" class="w-full py-3 gradient-btn rounded-xl">Send Reset Link</button>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800/80 dark:bg-gray-900/80 backdrop-blur-xl text-white px-4 py-3 rounded-xl shadow-2xl z-50 hidden transition-all duration-300 opacity-0 translate-y-4 border border-white/10">
+        <div class="flex items-center gap-3">
+            <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
+            <div>
+                <p class="font-medium" id="toast-title">Success</p>
+                <p class="text-sm text-gray-300" id="toast-message">Action completed</p>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" class="hidden" multiple>
+    <div id="rename-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl animate-fade-in border border-white/30 dark:border-gray-700/30">
+            <h3 class="text-lg font-bold mb-4">Rename Chat</h3>
+            <input type="text" id="rename-input" class="w-full p-3 bg-white/30 dark:bg-gray-700/50 rounded-xl border border-white/30 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-primary-500 mb-4" placeholder="New chat title">
+            <div class="flex justify-end gap-2">
+                <button id="rename-cancel" class="px-4 py-2 bg-white/30 dark:bg-gray-700/50 rounded-lg hover:bg-white/50">Cancel</button>
+                <button id="rename-save" class="px-4 py-2 gradient-btn rounded-lg">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="selector-placement place-bottom-left">
+        <section class="code">
+            <style>
+                .code {
+                    display: inline-flex;
+                    flex-direction: column;
+                    align-items: center;
+                    background: transparent;
+                    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                    position: relative;
+                }
+                .selector-btn {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    background: rgba(20, 30, 45, 0.6);
+                    backdrop-filter: blur(16px) saturate(200%);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 2.5rem;
+                    padding: 0.5rem 1rem 0.5rem 0.9rem;
+                    box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255,255,255,0.05);
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    color: white;
+                    width: fit-content;
+                }
+                .selector-btn:hover {
+                    background: rgba(35, 50, 75, 0.7);
+                    border-color: rgba(255, 255, 255, 0.2);
+                }
+                .btn-icon { font-size: 1.5rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+                .btn-name {
+                    font-weight: 500;
+                    font-size: 0.95rem;
+                    white-space: nowrap;
+                    background: linear-gradient(135deg, #ffffff, #e0e8ff);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                }
+                .btn-chevron {
+                    color: rgba(255,255,255,0.6);
+                    font-size: 0.8rem;
+                    transition: transform 0.2s;
+                    margin-left: 0.2rem;
+                }
+                .selector-btn.active .btn-chevron { transform: rotate(180deg); }
+                .model-dropdown {
+                    position: absolute;
+                    top: calc(100% + 0.5rem);
+                    left: 0;
+                    min-width: 240px;
+                    background: rgba(15, 25, 40, 0.75);
+                    backdrop-filter: blur(24px) saturate(200%);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 1.8rem;
+                    padding: 0.4rem;
+                    box-shadow: 0 20px 40px -12px black, inset 0 1px 2px rgba(255,255,255,0.05);
+                    display: none;
+                    z-index: 100;
+                    flex-direction: column;
+                    gap: 0.2rem;
+                }
+                .model-dropdown.show { display: flex; }
+                .model-option {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.6rem;
+                    padding: 0.5rem 0.9rem;
+                    border-radius: 1.5rem;
+                    cursor: pointer;
+                    transition: background 0.15s;
+                    border: 1px solid transparent;
+                    color: rgba(255,255,255,0.9);
+                    font-size: 0.9rem;
+                }
+                .model-option:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                    border-color: rgba(255, 255, 255, 0.1);
+                }
+                .model-option.selected {
+                    background: rgba(255, 255, 255, 0.12);
+                    border-color: rgba(255, 255, 255, 0.2);
+                }
+                .option-icon {
+                    font-size: 1.6rem;
+                    width: 2.2rem;
+                    text-align: center;
+                    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+                }
+                .option-emoji {
+                    font-size: 1.5rem;
+                    line-height: 1;
+                    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+                }
+                .option-name { flex: 1; font-weight: 500; }
+                .limit-chip {
+                    background: rgba(0, 30, 60, 0.7);
+                    backdrop-filter: blur(4px);
+                    border-radius: 2rem;
+                    padding: 0.2rem 0.7rem;
+                    font-size: 0.65rem;
+                    font-weight: 500;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.2rem;
+                    color: #aac8ff;
+                    border: 1px solid rgba(255,255,255,0.1);
+                    white-space: nowrap;
+                }
+                .limit-chip i { font-size: 0.6rem; color: #5f8aff; }
+                .placeholder-chip { width: 62px; height: 1.5rem; visibility: hidden; }
+                .code-expert .option-icon { color: #3b82f6; }
+                .lightening .option-icon { color: #fbbf24; }
+                .creative .option-icon { color: #c084fc; }
+                .deep-thought .option-icon { color: #34d399; }
+                .selector-placement.place-bottom-left {
+                    position: fixed;
+                    bottom: 20px;
+                    left: 20px;
+                    z-index: 1000;
+                }
+            </style>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+            <div style="position: relative;">
+                <div class="selector-btn" id="selectorBtn">
+                    <i class="fas fa-terminal btn-icon" id="btnIcon" style="color: #3b82f6;"></i>
+                    <span class="btn-name" id="btnName">Code Expert</span>
+                    <i class="fas fa-chevron-down btn-chevron"></i>
+                </div>
+                <div class="model-dropdown" id="modelDropdown">
+                    <div class="model-option code-expert selected" data-model="code-expert" data-icon="fa-terminal" data-name="Code Expert">
+                        <i class="fas fa-terminal option-icon"></i>
+                        <span class="option-emoji">🦊</span>
+                        <span class="option-name">Code Expert</span>
+                        <div class="limit-chip"><i class="fa-regular fa-message"></i> 30/day</div>
+                    </div>
+                    <div class="model-option lightening" data-model="lightening" data-icon="fa-rocket" data-name="Lightening">
+                        <i class="fas fa-rocket option-icon"></i>
+                        <span class="option-emoji">🐎</span>
+                        <span class="option-name">Lightening</span>
+                        <div class="placeholder-chip"></div>
+                    </div>
+                    <div class="model-option creative" data-model="creative" data-icon="fa-wand-magic" data-name="Creative">
+                        <i class="fas fa-wand-magic option-icon"></i>
+                        <span class="option-emoji">🦄</span>
+                        <span class="option-name">Creative</span>
+                        <div class="placeholder-chip"></div>
+                    </div>
+                    <div class="model-option deep-thought" data-model="deep-thought" data-icon="fa-book" data-name="Deep Thought">
+                        <i class="fas fa-book option-icon"></i>
+                        <span class="option-emoji">🐋</span>
+                        <span class="option-name">Deep Thought</span>
+                        <div class="placeholder-chip"></div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                (function() {
+                    const btn = document.getElementById('selectorBtn');
+                    const dropdown = document.getElementById('modelDropdown');
+                    const options = document.querySelectorAll('.model-option');
+                    const btnIcon = document.getElementById('btnIcon');
+                    const btnName = document.getElementById('btnName');
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dropdown.classList.toggle('show');
+                        btn.classList.toggle('active');
+                    });
+                    document.addEventListener('click', (e) => {
+                        if (!btn.contains(e.target) && !dropdown.contains(e.target)) {
+                            dropdown.classList.remove('show');
+                            btn.classList.remove('active');
+                        }
+                    });
+                    options.forEach(opt => {
+                        opt.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            options.forEach(o => o.classList.remove('selected'));
+                            opt.classList.add('selected');
+                            const iconClass = opt.dataset.icon;
+                            const modelName = opt.dataset.name;
+                            btnIcon.className = `btn-icon fas ${iconClass}`;
+                            btnName.textContent = modelName;
+                            if (opt.classList.contains('code-expert')) btnIcon.style.color = '#3b82f6';
+                            else if (opt.classList.contains('lightening')) btnIcon.style.color = '#fbbf24';
+                            else if (opt.classList.contains('creative')) btnIcon.style.color = '#c084fc';
+                            else if (opt.classList.contains('deep-thought')) btnIcon.style.color = '#34d399';
+                            dropdown.classList.remove('show');
+                            btn.classList.remove('active');
+                        });
+                    });
+                })();
+            </script>
+        </section>
+    </div>
+
+    <script>
+        // Configuration – CHANGE THIS TO YOUR WORKER URL
+        const WORKER_URL = 'https://your-worker.workers.dev/ask'; // <-- replace with your deployed worker URL
+
+        // State Management
+        const state = {
+            theme: localStorage.getItem('theme') || 'dark',
+            username: localStorage.getItem('username') || 'Alex',
+            token: localStorage.getItem('token') || null,
+            tasks: JSON.parse(localStorage.getItem('xroga-tasks')) || [],
+            autoSpeak: localStorage.getItem('autoSpeak') !== 'false',
+            currentChatId: null,
+            chats: JSON.parse(localStorage.getItem('xroga-chats')) || [],
+            isTyping: false,
+            isRecording: false,
+            topicsVisible: false,
+            currentLanguage: null,
+            uploadedFiles: [],
+            selectedChat: null,
+            isSidebarOpen: false
+        };
+
+        // DOM Elements
+        const elements = {
+            themeToggle: document.getElementById('theme-toggle'),
+            mobileThemeToggle: document.getElementById('mobile-theme-toggle'),
+            html: document.documentElement,
+            sidebar: document.getElementById('sidebar'),
+            sidebarOverlay: document.getElementById('sidebar-overlay'),
+            mobileMenuBtn: document.getElementById('mobile-menu-btn'),
+            chatList: document.getElementById('chat-list'),
+            searchChats: document.getElementById('search-chats'),
+            chatInput: document.getElementById('chat-input'),
+            sendBtn: document.getElementById('send-btn'),
+            chatMessages: document.getElementById('chat-messages'),
+            typingIndicator: document.getElementById('typing-indicator'),
+            chatContainer: document.getElementById('chat-container'),
+            clearChatBtn: document.getElementById('clear-chat'),
+            exportChatBtn: document.getElementById('export-chat'),
+            charCount: document.getElementById('char-count'),
+            clearInputBtn: document.getElementById('clear-input'),
+            topicsSection: document.getElementById('topics-section'),
+            topicsToggleContainer: document.getElementById('topics-toggle-container'),
+            toggleTopicsBtn: document.getElementById('toggle-topics-btn'),
+            topicsChevron: document.getElementById('topics-chevron'),
+            topicChips: document.querySelectorAll('.topic-chip'),
+            mainHeader: document.getElementById('main-header'),
+            newChatBtn: document.getElementById('new-chat'),
+            quickActions: document.querySelectorAll('.quick-action'),
+            bookBtn: document.getElementById('book-btn'),
+            topicsModal: document.getElementById('topics-modal'),
+            plusBtn: document.getElementById('plus-btn'),
+            plusUploadMenu: document.getElementById('plus-upload-menu'),
+            clipBtn: document.getElementById('clip-btn'),
+            clipUploadMenu: document.getElementById('clip-upload-menu'),
+            uploadOptions: document.querySelectorAll('.upload-option'),
+            voiceBtn: document.getElementById('voice-btn'),
+            voiceIndicator: document.getElementById('voice-indicator'),
+            fileUploadPreview: document.getElementById('file-upload-preview'),
+            fileInput: document.getElementById('file-input'),
+            languageBtn: document.getElementById('language-btn'),
+            languageMenu: document.getElementById('language-menu'),
+            languageItems: document.querySelectorAll('.language-item'),
+            settingsBtn: document.getElementById('settings-btn'),
+            settingsModal: document.getElementById('settings-modal'),
+            closeSettings: document.getElementById('close-settings'),
+            saveSettingsBtn: document.getElementById('save-settings'),
+            profileName: document.getElementById('profile-name'),
+            usernameElement: document.getElementById('username'),
+            usernameInChat: document.getElementById('username-in-chat'),
+            toast: document.getElementById('toast'),
+            toastTitle: document.getElementById('toast-title'),
+            toastMessage: document.getElementById('toast-message'),
+            topicItems: document.querySelectorAll('.topic-item'),
+            logoutBtn: document.getElementById('logout-btn'),
+            sidebarUsername: document.getElementById('sidebar-username'),
+            sidebarStatus: document.getElementById('sidebar-status'),
+            toggleTasksBtn: document.getElementById('toggle-tasks-btn'),
+            tasksPanel: document.getElementById('tasks-panel'),
+            tasksChevron: document.getElementById('tasks-chevron'),
+            taskInput: document.getElementById('task-input'),
+            addTaskBtn: document.getElementById('add-task-btn'),
+            tasksList: document.getElementById('tasks-list'),
+            voiceOutputBtn: document.getElementById('voice-output-btn'),
+            autoSpeakCheck: document.getElementById('auto-speak')
+        };
+
+        // Helper Functions
+        function showToast(message, title = 'Info') {
+            elements.toastTitle.textContent = title;
+            elements.toastMessage.textContent = message;
+            elements.toast.classList.remove('hidden', 'opacity-0', 'translate-y-4');
+            setTimeout(() => elements.toast.classList.remove('opacity-0', 'translate-y-4'), 10);
+            setTimeout(() => {
+                elements.toast.classList.add('opacity-0', 'translate-y-4');
+                setTimeout(() => elements.toast.classList.add('hidden'), 300);
+            }, 3000);
+        }
+
+        function scrollToBottom() {
+            elements.chatContainer.scrollTop = elements.chatContainer.scrollHeight;
+        }
+
+        function updateUsernameDisplay() {
+            elements.usernameElement.textContent = state.username;
+            elements.usernameInChat.textContent = state.username;
+            if (elements.profileName) elements.profileName.value = state.username;
+            if (state.token && elements.sidebarUsername) elements.sidebarUsername.textContent = state.username;
+        }
+
+        function saveChats() {
+            localStorage.setItem('xroga-chats', JSON.stringify(state.chats));
+        }
+
+        // Chat History
+        function loadChatHistory(searchTerm = '') {
+            const chatList = elements.chatList;
+            chatList.innerHTML = '';
+            let filteredChats = state.chats;
+            if (searchTerm) {
+                filteredChats = state.chats.filter(chat => 
+                    chat.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    chat.messages.some(msg => msg.content.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+            }
+            if (filteredChats.length === 0) {
+                chatList.innerHTML = `<div class="text-center py-8"><div class="w-16 h-16 mx-auto mb-4 bg-white/30 dark:bg-gray-700/50 rounded-full flex items-center justify-center"><i data-lucide="message-square" class="w-8 h-8 text-gray-400"></i></div><p class="text-gray-500 dark:text-gray-400">${searchTerm ? 'No chats found' : 'No chats yet'}</p><p class="text-sm text-gray-400 dark:text-gray-500 mt-1">${searchTerm ? 'Try a different search term' : 'Start a new chat to begin'}</p></div>`;
+                lucide.createIcons();
+                return;
+            }
+            filteredChats.forEach(chat => {
+                const date = new Date(chat.timestamp);
+                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isPinned = chat.pinned || false;
+                const messageCount = chat.messages?.length || 0;
+                const chatDiv = document.createElement('div');
+                chatDiv.className = `chat-item group relative p-3 rounded-xl hover:bg-white/30 dark:hover:bg-gray-700/50 transition-all duration-200 cursor-pointer active:scale-[0.98] ${isPinned ? 'pinned' : ''}`;
+                chatDiv.dataset.chatId = chat.id;
+                chatDiv.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3 min-w-0 flex-1">
+                            <i data-lucide="message-square" class="w-4 h-4 text-primary-500 flex-shrink-0"></i>
+                            <div class="min-w-0 flex-1">
+                                <p class="font-medium text-sm truncate">${chat.title}</p>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate">${timeString}</p>
+                                    <span class="text-xs text-gray-400">•</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">${messageCount} messages</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            ${isPinned ? '<i data-lucide="pin" class="w-3 h-3 text-primary-500"></i>' : ''}
+                            <button class="chat-menu-btn p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/50 dark:hover:bg-gray-600/50"><i data-lucide="more-vertical" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    <div class="chat-dropdown absolute right-2 top-12 hidden bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl shadow-2xl rounded-xl border border-white/30 dark:border-gray-700/30 z-10 min-w-[180px] animate-fade-in">
+                        <button class="dropdown-item rename-chat w-full text-left px-4 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2"><i data-lucide="edit-2" class="w-4 h-4"></i><span>Rename</span></button>
+                        <button class="dropdown-item download-chat w-full text-left px-4 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2"><i data-lucide="download" class="w-4 h-4"></i><span>Download Chat</span></button>
+                        <button class="dropdown-item pin-chat w-full text-left px-4 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2"><i data-lucide="pin" class="w-4 h-4"></i><span>${isPinned ? 'Unpin Chat' : 'Pin Chat'}</span></button>
+                        <div class="border-t border-gray-200 dark:border-gray-700"></div>
+                        <button class="dropdown-item delete-chat w-full text-left px-4 py-2.5 hover:bg-red-100 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors flex items-center gap-2"><i data-lucide="trash-2" class="w-4 h-4"></i><span>Delete Chat</span></button>
+                    </div>
+                `;
+                chatList.appendChild(chatDiv);
+            });
+            lucide.createIcons();
+            attachChatItemEventListeners();
+        }
+
+        function attachChatItemEventListeners() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+                const chatId = parseInt(item.dataset.chatId);
+                const chat = state.chats.find(c => c.id === chatId);
+                if (!chat) return;
+                item.addEventListener('click', (e) => {
+                    if (!e.target.closest('.chat-menu-btn') && !e.target.closest('.chat-dropdown')) {
+                        loadChat(chat);
+                    }
+                });
+                const menuBtn = item.querySelector('.chat-menu-btn');
+                const dropdown = item.querySelector('.chat-dropdown');
+                menuBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.chat-dropdown').forEach(d => { if (d !== dropdown) d.classList.add('hidden'); });
+                    dropdown.classList.toggle('hidden');
+                });
+                dropdown.querySelector('.rename-chat').addEventListener('click', () => handleRenameChat(chat));
+                dropdown.querySelector('.download-chat').addEventListener('click', () => handleDownloadChat(chat));
+                dropdown.querySelector('.pin-chat').addEventListener('click', () => handlePinChat(chat));
+                dropdown.querySelector('.delete-chat').addEventListener('click', () => handleDeleteChat(chat));
+            });
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.chat-dropdown').forEach(d => d.classList.add('hidden'));
+            });
+        }
+
+        function handleRenameChat(chat) {
+            const renameInput = document.getElementById('rename-input');
+            renameInput.value = chat.title;
+            document.getElementById('rename-modal').classList.remove('hidden');
+            const save = () => {
+                const newTitle = renameInput.value.trim();
+                if (newTitle && newTitle !== chat.title) {
+                    chat.title = newTitle;
+                    saveChats();
+                    loadChatHistory(elements.searchChats.value);
+                    showToast('Chat renamed', 'Success');
+                }
+                cleanup();
+            };
+            const cancel = () => cleanup();
+            const cleanup = () => {
+                document.getElementById('rename-modal').classList.add('hidden');
+                document.getElementById('rename-save').removeEventListener('click', save);
+                document.getElementById('rename-cancel').removeEventListener('click', cancel);
+                window.removeEventListener('click', outsideClick);
+            };
+            const outsideClick = (e) => { if (e.target === document.getElementById('rename-modal')) cleanup(); };
+            document.getElementById('rename-save').addEventListener('click', save);
+            document.getElementById('rename-cancel').addEventListener('click', cancel);
+            window.addEventListener('click', outsideClick);
+        }
+
+        function handleDownloadChat(chat) {
+            const blob = new Blob([JSON.stringify(chat, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `xroga-chat-${chat.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Chat downloaded', 'Success');
+        }
+
+        function handlePinChat(chat) {
+            chat.pinned = !chat.pinned;
+            saveChats();
+            loadChatHistory(elements.searchChats.value);
+            showToast(chat.pinned ? 'Chat pinned' : 'Chat unpinned', 'Success');
+        }
+
+        function handleDeleteChat(chat) {
+            if (confirm('Delete this chat? This cannot be undone.')) {
+                state.chats = state.chats.filter(c => c.id !== chat.id);
+                saveChats();
+                loadChatHistory(elements.searchChats.value);
+                if (state.currentChatId === chat.id) createNewChat();
+                showToast('Chat deleted', 'Success');
+            }
+        }
+
+        function addChatToHistory(title, messages = []) {
+            const chat = {
+                id: Date.now(),
+                title: title || `Chat ${state.chats.length + 1}`,
+                messages: messages,
+                timestamp: new Date().toISOString(),
+                pinned: false,
+                color: 'text-primary-500'
+            };
+            state.chats.unshift(chat);
+            state.currentChatId = chat.id;
+            state.selectedChat = chat;
+            saveChats();
+            loadChatHistory(elements.searchChats.value);
+            return chat;
+        }
+
+        function loadChat(chat) {
+            state.selectedChat = chat;
+            state.currentChatId = chat.id;
+            elements.mainHeader.classList.add('hidden');
+            elements.topicsToggleContainer.classList.remove('hidden');
+            elements.chatMessages.innerHTML = '';
+            if (chat.messages && chat.messages.length) {
+                chat.messages.forEach(msg => {
+                    if (msg.role === 'user') addUserMessage(msg.content, false);
+                    else addAIMessage(msg.content, false);
+                });
+            } else {
+                elements.chatMessages.innerHTML = `<div class="flex flex-col items-center justify-center text-center max-w-4xl mx-auto py-8"><div class="relative mb-6"><div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-cyan-500 flex items-center justify-center shadow-xl mx-auto"><i data-lucide="bot" class="w-10 h-10 text-white"></i></div><span class="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></span></div><h2 class="text-4xl md:text-5xl font-bold gradient-text mb-4">${chat.title}</h2><p class="text-xl md:text-2xl text-gray-800 dark:text-gray-200 mb-8 max-w-2xl">This chat is empty. Start the conversation!</p></div>`;
+            }
+            scrollToBottom();
+            if (window.innerWidth < 1024) toggleSidebar(false);
+            showToast(`Loaded: ${chat.title}`, 'Chat loaded');
+        }
+
+        // Message Rendering
+        function addUserMessage(content, saveToHistory = true) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-enter flex gap-4 max-w-3xl ml-auto';
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            messageDiv.dataset.messageId = messageId;
+            const rawHtml = window.marked ? marked.parse(content) : content;
+            const safeHtml = window.DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+            messageDiv.innerHTML = `
+                <div class="flex-1 order-2">
+                    <div class="user-message p-4 shadow-lg relative group">
+                        <div class="message-content">${safeHtml}</div>
+                        <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button class="edit-msg p-1.5 rounded-lg bg-white/20 hover:bg-white/30" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                            <button class="copy-msg p-1.5 rounded-lg bg-white/20 hover:bg-white/30" title="Copy"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                    <div class="text-right mt-2"><span class="text-xs text-gray-500 dark:text-gray-400">${timestamp}</span></div>
+                </div>
+                <div class="flex-shrink-0 order-1">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center shadow-lg"><i data-lucide="user" class="w-5 h-5 text-white"></i></div>
+                </div>
+            `;
+            elements.chatMessages.appendChild(messageDiv);
+            lucide.createIcons();
+            if (window.hljs) messageDiv.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+            messageDiv.querySelector('.edit-msg').addEventListener('click', () => startEditing(messageDiv, true, content));
+            messageDiv.querySelector('.copy-msg').addEventListener('click', () => { navigator.clipboard.writeText(content); showToast('Copied!', 'Success'); });
+            if (saveToHistory && state.selectedChat) {
+                if (!state.selectedChat.messages) state.selectedChat.messages = [];
+                state.selectedChat.messages.push({ role: 'user', content, timestamp: new Date().toISOString(), messageId });
+                saveChats();
+            }
+            scrollToBottom();
+            return messageDiv;
+        }
+
+        function addAIMessage(content, saveToHistory = true) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-enter flex gap-4 max-w-3xl';
+            const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            messageDiv.dataset.messageId = messageId;
+            const rawHtml = window.marked ? marked.parse(content) : content;
+            const safeHtml = window.DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+            messageDiv.innerHTML = `
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-full overflow-hidden shadow-lg"><img src="https://i.postimg.cc/Sj09h9Gq/Untitled-design-(64).png" alt="Xroga AI" class="w-full h-full object-cover"></div>
+                </div>
+                <div class="flex-1">
+                    <div class="ai-message p-5 rounded-2xl shadow-sm relative group">
+                        <div class="flex items-center gap-3 mb-3"><span class="font-bold text-lg">Xroga AI</span><span class="text-xs px-2 py-1 bg-primary-500/30 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full backdrop-blur-sm">Online</span></div>
+                        <div class="prose dark:prose-invert max-w-none markdown-body message-content">${safeHtml}</div>
+                        <div class="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <button class="message-action copy-btn p-2 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Copy"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                            <button class="message-action regenerate-btn p-2 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Regenerate"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                            <button class="message-action speak-btn p-2 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Speak"><i data-lucide="volume-2" class="w-4 h-4"></i></button>
+                            <button class="message-action edit-btn p-2 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" title="Edit"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            elements.chatMessages.appendChild(messageDiv);
+            lucide.createIcons();
+            messageDiv.querySelectorAll('pre code').forEach(block => {
+                if (window.hljs) hljs.highlightElement(block);
+                const codeText = block.innerText;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper glass-panel p-3 rounded-xl my-3';
+                const toolbar = document.createElement('div');
+                toolbar.className = 'code-toolbar flex justify-end gap-2 mb-2';
+                const editBtn = document.createElement('button');
+                editBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+                editBtn.innerHTML = '<i data-lucide="pencil" class="w-4 h-4"></i>';
+                editBtn.addEventListener('click', () => editCodeBlock(block, codeText));
+                const copyCodeBtn = document.createElement('button');
+                copyCodeBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+                copyCodeBtn.innerHTML = '<i data-lucide="copy" class="w-4 h-4"></i>';
+                copyCodeBtn.addEventListener('click', () => { navigator.clipboard.writeText(codeText); showToast('Code copied!', 'Success'); });
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+                deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+                deleteBtn.addEventListener('click', () => wrapper.remove());
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+                downloadBtn.innerHTML = '<i data-lucide="download" class="w-4 h-4"></i>';
+                downloadBtn.addEventListener('click', () => downloadCode(codeText));
+                const runBtn = document.createElement('button');
+                runBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+                runBtn.innerHTML = '<i data-lucide="play" class="w-4 h-4"></i>';
+                runBtn.addEventListener('click', () => runCode(codeText, wrapper));
+                const deployBtn = document.createElement('a');
+                deployBtn.href = 'https://www.stripe.com';
+                deployBtn.target = '_blank';
+                deployBtn.className = 'glass-btn p-1.5 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-1';
+                deployBtn.innerHTML = '<i data-lucide="rocket" class="w-4 h-4"></i><span class="badge-pro text-xs">paid</span>';
+                toolbar.appendChild(editBtn);
+                toolbar.appendChild(copyCodeBtn);
+                toolbar.appendChild(deleteBtn);
+                toolbar.appendChild(downloadBtn);
+                toolbar.appendChild(runBtn);
+                toolbar.appendChild(deployBtn);
+                const pre = block.closest('pre');
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(toolbar);
+                wrapper.appendChild(pre);
+                const outputDiv = document.createElement('div');
+                outputDiv.className = 'code-output mt-3 p-3 bg-black/30 rounded-lg text-sm font-mono hidden';
+                wrapper.appendChild(outputDiv);
+                lucide.createIcons(wrapper);
+            });
+            messageDiv.querySelector('.copy-btn').addEventListener('click', () => { navigator.clipboard.writeText(content); showToast('Copied!', 'Success'); });
+            messageDiv.querySelector('.regenerate-btn').addEventListener('click', () => regenerateAIMessage(messageDiv));
+            messageDiv.querySelector('.speak-btn').addEventListener('click', () => speakText(content));
+            messageDiv.querySelector('.edit-btn').addEventListener('click', () => startEditing(messageDiv, false, content));
+            if (saveToHistory && state.selectedChat) {
+                if (!state.selectedChat.messages) state.selectedChat.messages = [];
+                state.selectedChat.messages.push({ role: 'assistant', content, timestamp: new Date().toISOString(), messageId });
+                saveChats();
+            }
+            scrollToBottom();
+            if (state.autoSpeak) speakText(content);
+            return messageDiv;
+        }
+
+        function editCodeBlock(codeElement, originalCode) {
+            const textarea = document.createElement('textarea');
+            textarea.value = originalCode;
+            textarea.className = 'w-full p-2 bg-white/20 dark:bg-gray-700/50 rounded-lg font-mono text-sm resize-y min-h-[150px]';
+            const saveBtn = document.createElement('button');
+            saveBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> Save';
+            saveBtn.className = 'glass-btn px-3 py-1 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors mr-2';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i> Cancel';
+            cancelBtn.className = 'glass-btn px-3 py-1 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors';
+            const buttonBar = document.createElement('div');
+            buttonBar.className = 'flex gap-2 mt-2';
+            buttonBar.appendChild(saveBtn);
+            buttonBar.appendChild(cancelBtn);
+            const wrapper = codeElement.closest('.code-block-wrapper');
+            const toolbar = wrapper.querySelector('.code-toolbar');
+            toolbar.style.display = 'none';
+            codeElement.style.display = 'none';
+            codeElement.insertAdjacentElement('afterend', textarea);
+            textarea.insertAdjacentElement('afterend', buttonBar);
+            lucide.createIcons(buttonBar);
+            const cleanup = () => {
+                textarea.remove();
+                buttonBar.remove();
+                codeElement.style.display = 'block';
+                toolbar.style.display = 'flex';
+            };
+            saveBtn.addEventListener('click', () => {
+                codeElement.textContent = textarea.value;
+                if (window.hljs) hljs.highlightElement(codeElement);
+                cleanup();
+                showToast('Code updated', 'Success');
+            });
+            cancelBtn.addEventListener('click', cleanup);
+        }
+
+        function downloadCode(codeText) {
+            const blob = new Blob([codeText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'code_snippet.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Code downloaded', 'Download');
+        }
+
+        function runCode(code, wrapper) {
+            const outputDiv = wrapper.querySelector('.code-output');
+            outputDiv.innerHTML = '';
+            outputDiv.classList.remove('hidden');
+            const originalLog = console.log;
+            const logs = [];
+            console.log = (...args) => { logs.push(args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' ')); originalLog.apply(console, args); };
+            const originalError = console.error;
+            const errors = [];
+            console.error = (...args) => { errors.push(args.map(arg => String(arg)).join(' ')); originalError.apply(console, args); };
+            try {
+                const func = new Function(code);
+                const result = func();
+                if (result !== undefined) logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : result));
+            } catch (e) {
+                errors.push(e.toString());
+            } finally {
+                console.log = originalLog;
+                console.error = originalError;
+            }
+            let outputText = '';
+            if (logs.length) outputText += logs.join('\n');
+            if (errors.length) outputText += (outputText ? '\n\n' : '') + '❌ ' + errors.join('\n');
+            if (!outputText) outputText = '✅ Code executed (no output)';
+            outputDiv.innerText = outputText;
+        }
+
+        async function regenerateAIMessage(aiMessageDiv) {
+            const allMessages = Array.from(elements.chatMessages.children);
+            const aiIndex = allMessages.indexOf(aiMessageDiv);
+            let userMessageContent = null;
+            for (let i = aiIndex - 1; i >= 0; i--) {
+                const msgDiv = allMessages[i];
+                if (msgDiv.querySelector('.user-message')) {
+                    userMessageContent = msgDiv.querySelector('.message-content').innerText;
+                    break;
+                }
+            }
+            if (!userMessageContent) { showToast('Cannot find original message', 'Error'); return; }
+            state.isTyping = true;
+            elements.typingIndicator.classList.remove('hidden');
+            const newResponse = await callAIWorker(userMessageContent);
+            state.isTyping = false;
+            elements.typingIndicator.classList.add('hidden');
+            const contentDiv = aiMessageDiv.querySelector('.message-content');
+            const rawHtml = window.marked ? marked.parse(newResponse) : newResponse;
+            const safeHtml = window.DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+            contentDiv.innerHTML = safeHtml;
+            const messageId = aiMessageDiv.dataset.messageId;
+            if (state.selectedChat) {
+                const msg = state.selectedChat.messages.find(m => m.messageId === messageId);
+                if (msg) { msg.content = newResponse; saveChats(); }
+            }
+            showToast('Response regenerated', 'Success');
+        }
+
+        function startEditing(messageDiv, isUser, originalContent) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            const textContent = contentDiv.innerText;
+            const textarea = document.createElement('textarea');
+            textarea.value = textContent;
+            textarea.className = 'w-full p-2 bg-white/20 dark:bg-gray-700/50 rounded-lg text-inherit resize-y min-h-[100px]';
+            const saveBtn = document.createElement('button');
+            saveBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i>';
+            saveBtn.className = 'p-2 bg-green-500/30 rounded-lg hover:bg-green-500/50';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i>';
+            cancelBtn.className = 'p-2 bg-red-500/30 rounded-lg hover:bg-red-500/50';
+            const editControls = document.createElement('div');
+            editControls.className = 'flex gap-2 mt-2';
+            editControls.appendChild(saveBtn);
+            editControls.appendChild(cancelBtn);
+            contentDiv.style.display = 'none';
+            contentDiv.parentNode.insertBefore(textarea, contentDiv.nextSibling);
+            contentDiv.parentNode.insertBefore(editControls, textarea.nextSibling);
+            lucide.createIcons();
+            const cleanup = () => {
+                textarea.remove();
+                editControls.remove();
+                contentDiv.style.display = 'block';
+            };
+            saveBtn.addEventListener('click', () => {
+                const newContent = textarea.value.trim();
+                if (newContent && newContent !== originalContent) {
+                    if (isUser) contentDiv.innerText = newContent;
+                    else {
+                        const rawHtml = window.marked ? marked.parse(newContent) : newContent;
+                        const safeHtml = window.DOMPurify ? DOMPurify.sanitize(rawHtml) : rawHtml;
+                        contentDiv.innerHTML = safeHtml;
+                    }
+                    const messageId = messageDiv.dataset.messageId;
+                    if (state.selectedChat) {
+                        const msg = state.selectedChat.messages.find(m => m.messageId === messageId);
+                        if (msg) { msg.content = newContent; saveChats(); }
+                    }
+                    showToast('Message updated', 'Success');
+                }
+                cleanup();
+            });
+            cancelBtn.addEventListener('click', cleanup);
+        }
+
+        // AI Worker Integration
+        async function callAIWorker(userMessage) {
+            try {
+                const response = await fetch(WORKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: userMessage })
+                });
+                const data = await response.json();
+                if (data.success) return data.reply;
+                else throw new Error(data.error || 'Unknown error');
+            } catch (err) {
+                console.error('Worker error:', err);
+                return `Sorry, I'm having trouble connecting to the AI service. Please try again later. (${err.message})`;
+            }
+        }
+
+        async function sendMessage() {
+            const message = elements.chatInput.value.trim();
+            if (!message || state.isTyping) return;
+
+            if (elements.mainHeader.classList.contains('hidden') === false) {
+                elements.mainHeader.classList.add('hidden');
+                elements.topicsToggleContainer.classList.remove('hidden');
+            }
+
+            if (!state.selectedChat) {
+                const title = message.length > 30 ? message.substring(0, 30) + "..." : message;
+                addChatToHistory(title);
+            }
+
+            addUserMessage(message);
+            elements.chatInput.value = '';
+            elements.chatInput.style.height = '48px';
+            updateCharCount();
+            elements.fileUploadPreview.classList.add('hidden');
+            elements.fileUploadPreview.innerHTML = '';
+            state.uploadedFiles = [];
+
+            state.isTyping = true;
+            elements.typingIndicator.classList.remove('hidden');
+
+            const aiResponse = await callAIWorker(message);
+
+            state.isTyping = false;
+            elements.typingIndicator.classList.add('hidden');
+
+            await new Promise(r => setTimeout(r, 500));
+            addAIMessage(aiResponse);
+
+            if (state.selectedChat && state.selectedChat.messages.length === 2) {
+                const newTitle = message.length > 30 ? message.substring(0, 30) + "..." : message;
+                state.selectedChat.title = newTitle;
+                saveChats();
+                loadChatHistory(elements.searchChats.value);
+            }
+        }
+
+        // Voice & other helpers
+        function speakText(text) {
+            if (!window.speechSynthesis) { showToast('Speech not supported', 'Error'); return; }
+            const utterance = new SpeechRecognition ? new SpeechSynthesisUtterance(text) : null;
+            if (utterance) window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance);
+        }
+
+        function updateCharCount() {
+            const length = elements.chatInput.value.length;
+            elements.charCount.textContent = `${length}/2000`;
+            if (length > 1900) elements.charCount.classList.add('text-red-500');
+            else elements.charCount.classList.remove('text-red-500');
+        }
+
+        function toggleSidebar(force) {
+            const shouldOpen = force !== undefined ? force : !state.isSidebarOpen;
+            state.isSidebarOpen = shouldOpen;
+            elements.sidebar.classList.toggle('-translate-x-full', !shouldOpen);
+            elements.sidebarOverlay.classList.toggle('hidden', !shouldOpen);
+            const mainContent = document.getElementById('main-content');
+            if (mainContent) {
+                mainContent.classList.toggle('lg:ml-72', shouldOpen);
+                mainContent.classList.toggle('main-content-expanded', !shouldOpen);
+            }
+            const desktopToggle = document.getElementById('desktop-sidebar-toggle');
+            if (desktopToggle) {
+                const icon = desktopToggle.querySelector('i');
+                icon.setAttribute('data-lucide', shouldOpen ? 'panel-left-close' : 'panel-left-open');
+                lucide.createIcons();
+            }
+        }
+
+        function initTheme() {
+            if (state.theme === 'dark') elements.html.classList.add('dark');
+            else elements.html.classList.remove('dark');
+        }
+
+        function toggleTheme() {
+            state.theme = state.theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('theme', state.theme);
+            initTheme();
+            lucide.createIcons();
+            showToast('Theme updated', 'Theme changed');
+        }
+
+        function createNewChat() {
+            state.selectedChat = null;
+            state.currentChatId = null;
+            elements.mainHeader.classList.remove('hidden');
+            elements.topicsToggleContainer.classList.add('hidden');
+            elements.topicsSection.classList.add('hidden');
+            state.topicsVisible = false;
+            elements.topicsChevron.style.transform = 'rotate(0deg)';
+            elements.toggleTopicsBtn.querySelector('span').textContent = 'Show Topics';
+            elements.fileUploadPreview.classList.add('hidden');
+            elements.fileUploadPreview.innerHTML = '';
+            state.uploadedFiles = [];
+            elements.chatMessages.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center max-w-4xl mx-auto py-8">
+                    <div class="relative mb-6"><div class="w-20 h-20 rounded-full bg-gradient-to-br from-primary-500 to-cyan-500 flex items-center justify-center shadow-xl mx-auto"><i data-lucide="bot" class="w-10 h-10 text-white"></i></div><span class="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse"></span></div>
+                    <h2 class="text-4xl md:text-5xl font-bold gradient-text mb-4">Xroga AI</h2>
+                    <div class="inline-flex items-center gap-2 mb-6"><span class="px-4 py-2 bg-primary-500/20 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium backdrop-blur-sm">✨ Online & Ready</span></div>
+                    <p class="text-xl md:text-2xl text-gray-800 dark:text-gray-200 mb-8 max-w-2xl">Hello <span id="username-in-chat" class="font-semibold gradient-text">${state.username}</span>!<br>What can I help you with today?</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-4">
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Build a website for '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-blue-500/20 rounded-xl group-hover:bg-blue-500/30 transition-colors"><i data-lucide="globe" class="w-8 h-8 text-blue-600 dark:text-blue-400"></i></div><span class="font-semibold text-sm">Website Build</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Plan a trip to '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-green-500/20 rounded-xl group-hover:bg-green-500/30 transition-colors"><i data-lucide="plane" class="w-8 h-8 text-green-600 dark:text-green-400"></i></div><span class="font-semibold text-sm">Travel Plan</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Give me productivity tips for '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-orange-500/20 rounded-xl group-hover:bg-orange-500/30 transition-colors"><i data-lucide="zap" class="w-8 h-8 text-orange-600 dark:text-orange-400"></i></div><span class="font-semibold text-sm">Boost Productivity</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Fix this code: '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-red-500/20 rounded-xl group-hover:bg-red-500/30 transition-colors"><i data-lucide="code" class="w-8 h-8 text-red-600 dark:text-red-400"></i></div><span class="font-semibold text-sm">Fix Code</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Help me debug: '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-purple-500/20 rounded-xl group-hover:bg-purple-500/30 transition-colors"><i data-lucide="bug" class="w-8 h-8 text-purple-600 dark:text-purple-400"></i></div><span class="font-semibold text-sm">Improve Bugs</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Solve this complex problem: '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-yellow-500/20 rounded-xl group-hover:bg-yellow-500/30 transition-colors"><i data-lucide="brain" class="w-8 h-8 text-yellow-600 dark:text-yellow-400"></i></div><span class="font-semibold text-sm">Complex Problems</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Draft an email about '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-pink-500/20 rounded-xl group-hover:bg-pink-500/30 transition-colors"><i data-lucide="mail" class="w-8 h-8 text-pink-600 dark:text-pink-400"></i></div><span class="font-semibold text-sm">Write Email</span></div></div>
+                        <div class="glass-panel p-5 rounded-2xl hover:scale-105 transition-transform duration-200 cursor-pointer group" onclick="document.getElementById('chat-input').value = 'Write copy for '; document.getElementById('chat-input').focus();"><div class="flex flex-col items-center text-center gap-3"><div class="p-3 bg-indigo-500/20 rounded-xl group-hover:bg-indigo-500/30 transition-colors"><i data-lucide="pencil" class="w-8 h-8 text-indigo-600 dark:text-indigo-400"></i></div><span class="font-semibold text-sm">Copywriting</span></div></div>
+                    </div>
+                </div>
+            `;
+            if (window.innerWidth < 1024) toggleSidebar(false);
+            lucide.createIcons();
+            showToast('New chat started', 'Ready');
+        }
+
+        // File Upload
+        function setupUploadControls() {
+            elements.plusBtn?.addEventListener('click', (e) => { e.stopPropagation(); elements.plusUploadMenu.classList.toggle('hidden'); elements.clipUploadMenu.classList.add('hidden'); });
+            elements.clipBtn?.addEventListener('click', (e) => { e.stopPropagation(); elements.clipUploadMenu.classList.toggle('hidden'); elements.plusUploadMenu.classList.add('hidden'); });
+            elements.uploadOptions.forEach(option => {
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const type = option.dataset.type;
+                    let accept = '';
+                    if (type === 'image') accept = 'image/*';
+                    else if (type === 'file') accept = '.pdf,.doc,.docx,.txt,.xlsx,.xls';
+                    else if (type === 'screenshot') accept = '.png,.jpg,.jpeg';
+                    else if (type === 'code') accept = '.js,.py,.html,.css,.ts,.java,.cpp,.php,.rb,.go,.rs';
+                    else if (type === 'document') accept = '.docx,.pdf,.pptx,.txt';
+                    else if (type === 'archive') accept = '.zip,.rar,.tar,.gz';
+                    elements.fileInput.accept = accept;
+                    elements.fileInput.click();
+                    elements.plusUploadMenu.classList.add('hidden');
+                    elements.clipUploadMenu.classList.add('hidden');
+                });
+            });
+            elements.fileInput.addEventListener('change', (event) => {
+                const files = Array.from(event.target.files);
+                files.forEach(file => {
+                    const previewDiv = document.createElement('div');
+                    previewDiv.className = 'file-preview p-3 mb-2 animate-fade-in';
+                    const fileType = file.type.startsWith('image/') ? 'image' : 'file';
+                    previewDiv.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-blue-500 rounded-lg"><i data-lucide="file" class="w-4 h-4 text-white"></i></div>
+                                <div><p class="font-medium text-sm truncate">${file.name}</p><p class="text-xs text-gray-500 dark:text-gray-400">${(file.size / 1024).toFixed(2)} KB • ${fileType}</p></div>
+                            </div>
+                            <button class="remove-file p-1 rounded-lg hover:bg-white/30 dark:hover:bg-gray-700/50 transition-colors" data-filename="${file.name}"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
+                        <div class="upload-progress mt-2"><div class="upload-progress-bar w-0"></div></div>
+                    `;
+                    elements.fileUploadPreview.appendChild(previewDiv);
+                    elements.fileUploadPreview.classList.remove('hidden');
+                    previewDiv.querySelector('.remove-file').addEventListener('click', () => { previewDiv.remove(); if (elements.fileUploadPreview.children.length === 0) elements.fileUploadPreview.classList.add('hidden'); });
+                    let progress = 0;
+                    const interval = setInterval(() => {
+                        progress += Math.random() * 20;
+                        if (progress >= 100) { clearInterval(interval); previewDiv.querySelector('.upload-progress').innerHTML = `<div class="flex items-center gap-2 text-xs text-green-600 dark:text-green-400"><i data-lucide="check-circle" class="w-3 h-3"></i><span>Upload complete</span></div>`; lucide.createIcons(); showToast(`${file.name} uploaded`, 'Success'); }
+                        previewDiv.querySelector('.upload-progress-bar').style.width = `${progress}%`;
+                    }, 200);
+                });
+                elements.fileInput.value = '';
+            });
+            document.addEventListener('click', (e) => {
+                if (elements.plusBtn && !elements.plusBtn.contains(e.target) && elements.plusUploadMenu && !elements.plusUploadMenu.contains(e.target)) elements.plusUploadMenu.classList.add('hidden');
+                if (elements.clipBtn && !elements.clipBtn.contains(e.target) && elements.clipUploadMenu && !elements.clipUploadMenu.contains(e.target)) elements.clipUploadMenu.classList.add('hidden');
+            });
+        }
+
+        // Voice Recognition
+        function initVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) { elements.voiceBtn.disabled = true; return; }
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.onstart = () => { state.isRecording = true; elements.voiceIndicator.classList.remove('hidden'); elements.voiceBtn.classList.add('animate-pulse'); showToast('Listening...', 'Voice input'); };
+            recognition.onresult = (event) => { let transcript = ''; for (let i = event.resultIndex; i < event.results.length; i++) transcript += event.results[i][0].transcript; elements.chatInput.value = transcript; updateCharCount(); };
+            recognition.onerror = () => { state.isRecording = false; elements.voiceIndicator.classList.add('hidden'); elements.voiceBtn.classList.remove('animate-pulse'); showToast('Voice input failed', 'Error'); };
+            recognition.onend = () => { state.isRecording = false; elements.voiceIndicator.classList.add('hidden'); elements.voiceBtn.classList.remove('animate-pulse'); if (elements.chatInput.value.trim()) showToast('Voice input complete', 'Ready'); };
+            elements.voiceBtn.addEventListener('click', () => { if (state.isRecording) recognition.stop(); else recognition.start(); });
+        }
+
+        // Tasks
+        function renderTasks() {
+            if (!elements.tasksList) return;
+            elements.tasksList.innerHTML = '';
+            state.tasks.forEach((task, index) => {
+                const taskDiv = document.createElement('div');
+                taskDiv.className = 'flex items-center justify-between p-2 bg-white/20 dark:bg-gray-700/30 rounded-lg';
+                taskDiv.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" class="task-checkbox" data-index="${index}" ${task.completed ? 'checked' : ''}>
+                        <span class="text-sm ${task.completed ? 'line-through text-gray-400' : ''}">${task.text}</span>
+                    </div>
+                    <button class="task-delete p-1 hover:bg-white/30 rounded" data-index="${index}"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                `;
+                elements.tasksList.appendChild(taskDiv);
+            });
+            lucide.createIcons();
+            document.querySelectorAll('.task-checkbox').forEach(cb => {
+                cb.addEventListener('change', (e) => { const idx = e.target.dataset.index; state.tasks[idx].completed = e.target.checked; saveTasks(); renderTasks(); });
+            });
+            document.querySelectorAll('.task-delete').forEach(btn => {
+                btn.addEventListener('click', (e) => { const idx = e.currentTarget.dataset.index; state.tasks.splice(idx, 1); saveTasks(); renderTasks(); });
+            });
+        }
+
+        function saveTasks() { localStorage.setItem('xroga-tasks', JSON.stringify(state.tasks)); }
+
+        // Auth UI
+        function updateAuthUI() {
+            if (state.token) {
+                if (elements.sidebarUsername) elements.sidebarUsername.textContent = state.username;
+                if (elements.sidebarStatus) elements.sidebarStatus.textContent = 'Logged in';
+                if (elements.logoutBtn) elements.logoutBtn.classList.remove('hidden');
+                const loginBtn = document.getElementById('login-show-btn');
+                if (loginBtn) loginBtn.closest('.p-4.border-t').style.display = 'none';
+            } else {
+                if (elements.sidebarUsername) elements.sidebarUsername.textContent = 'Guest';
+                if (elements.sidebarStatus) elements.sidebarStatus.textContent = 'Not logged in';
+                if (elements.logoutBtn) elements.logoutBtn.classList.add('hidden');
+                const loginBtn = document.getElementById('login-show-btn');
+                if (loginBtn) loginBtn.closest('.p-4.border-t').style.display = 'block';
+            }
+        }
+
+        // Initialization
+        function init() {
+            initTheme();
+            initVoiceRecognition();
+            setupUploadControls();
+            updateUsernameDisplay();
+            loadChatHistory();
+            updateCharCount();
+            renderTasks();
+            updateAuthUI();
+
+            if (state.chats.length === 0) {
+                const sampleChats = [
+                    { id: Date.now() - 1000, title: "Website Design Ideas", messages: [{ role: "user", content: "What are modern website design trends?", timestamp: new Date().toISOString() }, { role: "assistant", content: "Modern website design trends include dark mode, micro-interactions, 3D elements, and neumorphism.", timestamp: new Date().toISOString() }], timestamp: new Date().toISOString(), pinned: true, color: "text-primary-500" },
+                    { id: Date.now() - 2000, title: "Python Data Analysis", messages: [{ role: "user", content: "How to analyze data with pandas?", timestamp: new Date().toISOString() }, { role: "assistant", content: "Use pandas for data manipulation. Start with df.describe() for statistics.", timestamp: new Date().toISOString() }], timestamp: new Date().toISOString(), pinned: false, color: "text-green-500" }
+                ];
+                state.chats = sampleChats;
+                saveChats();
+                loadChatHistory();
+            }
+
+            // Event listeners
+            elements.themeToggle?.addEventListener('click', toggleTheme);
+            elements.mobileThemeToggle?.addEventListener('click', toggleTheme);
+            elements.mobileMenuBtn?.addEventListener('click', () => toggleSidebar(true));
+            elements.sidebarOverlay?.addEventListener('click', () => toggleSidebar(false));
+            document.getElementById('desktop-sidebar-toggle')?.addEventListener('click', () => toggleSidebar());
+            elements.newChatBtn?.addEventListener('click', createNewChat);
+            elements.sendBtn?.addEventListener('click', sendMessage);
+            elements.chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+            elements.clearChatBtn?.addEventListener('click', () => { if (confirm('Clear current chat?')) { if (state.selectedChat) { state.selectedChat.messages = []; saveChats(); elements.chatMessages.innerHTML = ''; showToast('Chat cleared', 'Cleared'); } else createNewChat(); } });
+            elements.exportChatBtn?.addEventListener('click', () => { if (state.selectedChat) handleDownloadChat(state.selectedChat); else showToast('No chat to export', 'Error'); });
+            elements.searchChats?.addEventListener('input', (e) => loadChatHistory(e.target.value));
+            elements.chatInput?.addEventListener('input', (e) => { updateCharCount(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; if (e.target.value.trim() && !state.topicsVisible) elements.topicsToggleContainer.classList.remove('hidden'); else if (!e.target.value.trim() && elements.mainHeader.classList.contains('hidden')) elements.topicsToggleContainer.classList.add('hidden'); });
+            elements.clearInputBtn?.addEventListener('click', () => { elements.chatInput.value = ''; elements.chatInput.style.height = '48px'; updateCharCount(); elements.chatInput.focus(); });
+            elements.toggleTopicsBtn?.addEventListener('click', () => { state.topicsVisible = !state.topicsVisible; elements.topicsSection.classList.toggle('hidden', !state.topicsVisible); elements.topicsChevron.style.transform = state.topicsVisible ? 'rotate(180deg)' : 'rotate(0deg)'; elements.toggleTopicsBtn.querySelector('span').textContent = state.topicsVisible ? 'Hide Topics' : 'Show Topics'; });
+            elements.topicChips.forEach(chip => { chip.addEventListener('click', () => { elements.chatInput.value = `Tell me about ${chip.textContent.toLowerCase()}`; elements.chatInput.focus(); showToast(`Topic selected: ${chip.textContent}`, 'Topic selected'); }); });
+            elements.bookBtn?.addEventListener('click', (e) => { e.stopPropagation(); elements.topicsModal.classList.toggle('hidden'); });
+            elements.topicItems.forEach(item => { item.addEventListener('click', () => { elements.chatInput.value = `I want to learn about ${item.textContent.toLowerCase()}`; elements.chatInput.focus(); elements.topicsModal.classList.add('hidden'); showToast(`Topic selected: ${item.textContent}`, 'Topic selected'); }); });
+            elements.languageBtn?.addEventListener('click', (e) => { e.stopPropagation(); elements.languageMenu.classList.toggle('hidden'); });
+            elements.languageItems.forEach(item => { item.addEventListener('click', () => { state.currentLanguage = item.dataset.lang; elements.languageBtn.querySelector('span').textContent = item.dataset.lang.charAt(0).toUpperCase() + item.dataset.lang.slice(1); elements.languageMenu.classList.add('hidden'); showToast(`Language set to ${item.dataset.lang}`, 'Language updated'); }); });
+            elements.settingsBtn?.addEventListener('click', () => { elements.settingsModal.classList.remove('hidden'); });
+            elements.closeSettings?.addEventListener('click', () => { elements.settingsModal.classList.add('hidden'); });
+            elements.settingsModal?.addEventListener('click', (e) => { if (e.target === elements.settingsModal) elements.settingsModal.classList.add('hidden'); });
+            elements.saveSettingsBtn?.addEventListener('click', () => { const newName = elements.profileName.value.trim(); if (newName && newName !== state.username) { state.username = newName; localStorage.setItem('username', state.username); updateUsernameDisplay(); showToast('Profile updated', 'Success'); } if (elements.autoSpeakCheck) { state.autoSpeak = elements.autoSpeakCheck.checked; localStorage.setItem('autoSpeak', state.autoSpeak); } elements.settingsModal.classList.add('hidden'); });
+            elements.quickActions?.forEach(btn => { btn.addEventListener('click', () => { const actionText = btn.querySelector('span').textContent; let prompt = ''; if (actionText === 'Generate content') prompt = 'Generate creative content about '; else if (actionText === 'Write code') prompt = 'Write a function in '; else if (actionText === 'Analyze data') prompt = 'Analyze this data: '; else if (actionText === 'Knowledge') prompt = 'Tell me about '; else if (actionText === 'Daily Task') prompt = 'Help me organize my daily tasks: '; else if (actionText === 'Boost My Day') prompt = 'Give me a motivational boost for today. '; else if (actionText === 'Trip Plan') prompt = 'Plan a trip to '; else prompt = actionText + ': '; elements.chatInput.value = prompt; updateCharCount(); elements.chatInput.focus(); }); });
+            elements.toggleTasksBtn?.addEventListener('click', () => { const isHidden = elements.tasksPanel.classList.toggle('hidden'); elements.tasksChevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)'; });
+            elements.addTaskBtn?.addEventListener('click', () => { const text = elements.taskInput.value.trim(); if (!text) return; state.tasks.push({ text, completed: false }); saveTasks(); renderTasks(); elements.taskInput.value = ''; });
+            elements.voiceOutputBtn?.addEventListener('click', () => { const lastAIMessage = document.querySelector('.ai-message:last-child'); if (lastAIMessage) speakText(lastAIMessage.innerText); else showToast('No AI message to speak', 'Info'); });
+            if (elements.autoSpeakCheck) { elements.autoSpeakCheck.checked = state.autoSpeak; elements.autoSpeakCheck.addEventListener('change', (e) => { state.autoSpeak = e.target.checked; localStorage.setItem('autoSpeak', state.autoSpeak); }); }
+
+            // Auth modal logic
+            const loginModal = document.getElementById('login-modal');
+            const forgotModal = document.getElementById('forgot-modal');
+            const loginShowBtn = document.getElementById('login-show-btn');
+            const closeLoginModal = document.getElementById('close-login-modal');
+            const closeForgot = document.getElementById('close-forgot');
+            const loginTab = document.getElementById('login-tab');
+            const registerTab = document.getElementById('register-tab');
+            const loginFormDiv = document.getElementById('login-form');
+            const registerFormDiv = document.getElementById('register-form');
+            const forgotPasswordBtn = document.getElementById('forgot-password');
+            const continueAsGuest = document.getElementById('continue-as-guest');
+            const loginBtnAuth = document.getElementById('login-btn');
+            const registerBtnAuth = document.getElementById('register-btn');
+            const googleBtnAuth = document.getElementById('google-login');
+            const githubBtnAuth = document.getElementById('github-login');
+            const sendResetBtnAuth = document.getElementById('send-reset-btn');
+            loginShowBtn.addEventListener('click', () => loginModal.classList.remove('hidden'));
+            closeLoginModal.addEventListener('click', () => loginModal.classList.add('hidden'));
+            closeForgot.addEventListener('click', () => forgotModal.classList.add('hidden'));
+            window.addEventListener('click', (e) => { if (e.target === loginModal) loginModal.classList.add('hidden'); if (e.target === forgotModal) forgotModal.classList.add('hidden'); });
+            loginTab.addEventListener('click', () => { loginTab.classList.add('border-b-2', 'border-primary-500'); loginTab.classList.remove('text-gray-500', 'dark:text-gray-400'); registerTab.classList.remove('border-b-2', 'border-primary-500'); registerTab.classList.add('text-gray-500', 'dark:text-gray-400'); loginFormDiv.classList.remove('hidden'); registerFormDiv.classList.add('hidden'); });
+            registerTab.addEventListener('click', () => { registerTab.classList.add('border-b-2', 'border-primary-500'); registerTab.classList.remove('text-gray-500', 'dark:text-gray-400'); loginTab.classList.remove('border-b-2', 'border-primary-500'); loginTab.classList.add('text-gray-500', 'dark:text-gray-400'); registerFormDiv.classList.remove('hidden'); loginFormDiv.classList.add('hidden'); });
+            document.querySelectorAll('.show-password').forEach(btn => { btn.addEventListener('click', function() { const targetId = this.dataset.target; const input = document.getElementById(targetId); const type = input.getAttribute('type') === 'password' ? 'text' : 'password'; input.setAttribute('type', type); const icon = this.querySelector('i'); icon.setAttribute('data-lucide', type === 'password' ? 'eye' : 'eye-off'); lucide.createIcons(); }); });
+            const registerPassword = document.getElementById('register-password');
+            const strengthBar = document.querySelector('.password-strength');
+            const strengthText = document.getElementById('password-strength-text');
+            registerPassword?.addEventListener('input', function() { const pwd = this.value; let strength = 0; if (pwd.length >= 8) strength++; if (pwd.match(/[a-z]/) && pwd.match(/[A-Z]/)) strength++; if (pwd.match(/\d/)) strength++; if (pwd.match(/[^a-zA-Z0-9]/)) strength++; strengthBar.className = 'password-strength'; if (pwd.length === 0) { strengthBar.style.width = '0'; strengthText.textContent = 'Enter a password'; } else if (strength <= 1) { strengthBar.classList.add('strength-weak'); strengthText.textContent = 'Weak password'; } else if (strength === 2) { strengthBar.classList.add('strength-medium'); strengthText.textContent = 'Medium password'; } else { strengthBar.classList.add('strength-strong'); strengthText.textContent = 'Strong password'; } });
+            forgotPasswordBtn?.addEventListener('click', (e) => { e.preventDefault(); loginModal.classList.add('hidden'); forgotModal.classList.remove('hidden'); });
+            sendResetBtnAuth?.addEventListener('click', () => { const email = document.getElementById('forgot-email').value; if (!email) showToast('Please enter your email', 'Error'); else { showToast('Reset link sent! (demo)', 'Success'); forgotModal.classList.add('hidden'); } });
+            continueAsGuest?.addEventListener('click', () => { loginModal.classList.add('hidden'); showToast('Continuing as guest', 'Welcome'); });
+            loginBtnAuth?.addEventListener('click', () => { const email = document.getElementById('login-email').value; const password = document.getElementById('login-password').value; const remember = document.getElementById('remember-me').checked; if (!email || !password) { showToast('Email and password required', 'Error'); return; } showToast('Logging in...', 'Please wait'); setTimeout(() => { state.token = 'fake-jwt-token'; state.username = email.split('@')[0]; localStorage.setItem('token', state.token); localStorage.setItem('username', state.username); if (remember) localStorage.setItem('remember', 'true'); updateAuthUI(); loginModal.classList.add('hidden'); showToast('Logged in successfully', 'Welcome'); }, 1000); });
+            registerBtnAuth?.addEventListener('click', () => { const name = document.getElementById('register-name').value; const email = document.getElementById('register-email').value; const password = document.getElementById('register-password').value; const confirm = document.getElementById('register-confirm').value; const terms = document.getElementById('terms').checked; if (!name || !email || !password || !confirm) { showToast('All fields required', 'Error'); return; } if (password !== confirm) { showToast('Passwords do not match', 'Error'); return; } if (!terms) { showToast('You must agree to the terms', 'Error'); return; } const strength = checkPasswordStrength(password); if (strength < 2) { showToast('Password too weak', 'Error'); return; } showToast('Creating account...', 'Please wait'); setTimeout(() => { state.token = 'fake-jwt-token'; state.username = name; localStorage.setItem('token', state.token); localStorage.setItem('username', name); updateAuthUI(); loginModal.classList.add('hidden'); showToast('Account created!', 'Welcome'); }, 1000); });
+            googleBtnAuth?.addEventListener('click', () => showToast('Google login – demo only', 'Info'));
+            githubBtnAuth?.addEventListener('click', () => showToast('GitHub login – demo only', 'Info'));
+            elements.logoutBtn?.addEventListener('click', () => { state.token = null; state.username = 'Guest'; localStorage.removeItem('token'); localStorage.removeItem('username'); updateAuthUI(); showToast('Logged out', 'See you soon'); });
+
+            // Autocomplete & autocorrect (simplified)
+            (function() {
+                const autocorrectDict = { "hlo": "hello", "helo": "hello", "helloo": "hello", "howto": "how to", "wat": "what", "wht": "what", "waht": "what", "hte": "the", "teh": "the", "adn": "and", "annd": "and", "thats": "that's", "dont": "don't", "doesnt": "doesn't", "isnt": "isn't", "wasnt": "wasn't", "werent": "weren't", "havent": "haven't", "hasnt": "hasn't", "hadnt": "hadn't", "wont": "won't", "wouldnt": "wouldn't", "cant": "can't", "couldnt": "couldn't", "shouldnt": "shouldn't", "mightnt": "mightn't", "mustnt": "mustn't", "neednt": "needn't", "dare": "daren't", "shallnt": "shan't", "oughtnt": "oughtn't", "whos": "who's", "whomst": "whom's", "yall": "y'all", "gonna": "going to", "wanna": "want to", "gimme": "give me", "lemme": "let me", "kinda": "kind of", "sorta": "sort of", "outta": "out of", "alot": "a lot", "alright": "all right", "anyways": "anyway", "everytime": "every time", "eachother": "each other", "inbetween": "in between", "infront": "in front", "couldof": "could have", "wouldof": "would have", "shouldof": "should have", "mightof": "might have", "mustof": "must have", "woulda": "would have", "coulda": "could have", "shoulda": "should have", "mighta": "might have", "musta": "must have", "gotta": "got to", "hafta": "have to", "hasta": "has to", "supposedto": "supposed to", "usedto": "used to", "dunno": "don't know", "idk": "I don't know", "imo": "in my opinion", "imho": "in my humble opinion", "lol": "laugh out loud", "brb": "be right back", "btw": "by the way", "omg": "oh my god", "tbh": "to be honest", "jk": "just kidding", "np": "no problem", "ty": "thank you", "thx": "thanks", "pls": "please", "plz": "please", "bc": "because", "cuz": "because", "cause": "because", "b/c": "because", "w/": "with", "w/o": "without", "vs": "versus", "etc": "etcetera", "eg": "for example", "ie": "that is", "aka": "also known as", "asap": "as soon as possible", "fyi": "for your information", "rsvp": "please reply", "ps": "postscript", "p.s.": "postscript", "javascipt": "JavaScript", "javscript": "JavaScript", "js": "JavaScript", "tyepscript": "TypeScript", "typescrip": "TypeScript", "pythn": "Python", "phyton": "Python", "pyhton": "Python", "reacht": "React", "reactjs": "React", "vuejs": "Vue", "angualr": "Angular", "anglar": "Angular", "nodjs": "Node.js", "nodejs": "Node.js", "expres": "Express", "expresjs": "Express.js", "mongodb": "MongoDB", "mysql": "MySQL", "postgre": "PostgreSQL", "sqlite": "SQLite", "firebase": "Firebase", "djanjo": "Django", "flaskk": "Flask", "rubyonrails": "Ruby on Rails", "rails": "Ruby on Rails", "htmml": "HTML", "cs": "CSS", "csss": "CSS", "tailwindcss": "Tailwind CSS", "bootsrap": "Bootstrap", "jquerry": "jQuery", "jqueryy": "jQuery", "ajax": "AJAX", "json": "JSON", "api": "API", "restapi": "REST API", "graphql": "GraphQL", "docker": "Docker", "kubernets": "Kubernetes", "k8s": "Kubernetes", "aws": "AWS", "azure": "Azure", "gcp": "Google Cloud", "vscode": "VS Code", "git": "Git", "github": "GitHub", "gitlab": "GitLab", "bitbucket": "Bitbucket", "jira": "Jira", "confluence": "Confluence", "slack": "Slack", "discord": "Discord", "trello": "Trello", "asana": "Asana", "notion": "Notion", "obsidian": "Obsidian", "google": "Google", "googl": "Google", "facebok": "Facebook", "fb": "Facebook", "insta": "Instagram", "ig": "Instagram", "twiter": "Twitter", "twittr": "Twitter", "x": "Twitter", "linkedin": "LinkedIn", "youtube": "YouTube", "yt": "YouTube", "reddit": "Reddit", "tiktok": "TikTok", "snapchat": "Snapchat", "pintrest": "Pinterest", "whatsapp": "WhatsApp", "telegram": "Telegram", "signal": "Signal", "spotify": "Spotify", "netflix": "Netflix", "amazon": "Amazon", "ebay": "eBay", "etsy": "Etsy", "shopify": "Shopify", "wordpress": "WordPress", "wix": "Wix", "squarespace": "Squarespace", "medium": "Medium", "substack": "Substack", "patreon": "Patreon", "kickstarter": "Kickstarter", "indiegogo": "Indiegogo", "producthunt": "Product Hunt", "hackernews": "Hacker News", "stackoverflow": "Stack Overflow", "quora": "Quora", "wikipedia": "Wikipedia", "imdb": "IMDb", "rottentomatoes": "Rotten Tomatoes", "calender": "calendar", "definately": "definitely", "defiantly": "definitely", "seperate": "separate", "occured": "occurred", "ocurred": "occurred", "accomodate": "accommodate", "embarass": "embarrass", "neccessary": "necessary", "priveledge": "privilege", "privelege": "privilege", "priviledge": "privilege", "publically": "publicly", "recieve": "receive", "refered": "referred", "refering": "referring", "thier": "their", "theyre": "they're", "there": "their/they're/there", "your": "you're/your", "ure": "your", "u": "you", "r": "are", "y": "why", "4": "for", "b4": "before", "c": "see", "cu": "see you", "cya": "see you", "tnx": "thanks", "tks": "thanks", "ppl": "people", "bcos": "because", "cos": "because", "idc": "I don't care", "irl": "in real life", "omw": "on my way", "ttyl": "talk to you later", "l8r": "later", "gr8": "great", "w8": "wait", "2moro": "tomorrow", "2day": "today", "2nite": "tonight" };
+                const exampleQueries = ["Build a responsive portfolio website with HTML, CSS, and JavaScript", "Create an e-commerce site with product listing and shopping cart", "How to make a landing page that converts visitors", "Write a function to sort an array in JavaScript", "Explain closures in JavaScript with examples", "React vs Vue: which one to choose for a new project", "Python script to download files from a URL", "Debug this Python code: [paste code]", "How to use async/await in JavaScript", "Set up a Node.js server with Express", "SQL query to join three tables", "CSS grid vs flexbox: when to use which", "Build a chat application using WebSockets", "Deploy a website on Netlify for free", "Git commands every developer should know", "Create a REST API with Python Flask", "Build a weather app using React and OpenWeather API", "How to center a div with CSS", "Responsive navigation bar with hamburger menu", "Merge two arrays in JavaScript without duplicates", "Sort a list of dictionaries by key in Python", "What is the difference between let and var in JavaScript", "How to use useState hook in React", "Build a todo list with local storage", "How to connect MongoDB to Node.js", "Write a regex to validate email address", "Create a countdown timer with JavaScript", "How to make an AJAX request with fetch API", "Build a simple calculator with HTML, CSS, JS", "How to deploy a Django app on Heroku", "What is CORS and how to fix it", "How to use environment variables in Node.js", "Build a CRUD app with Vue.js and Firebase", "How to create a custom hook in React", "What is TypeScript and why use it", "Convert JavaScript code to TypeScript", "How to use async/await in Python", "What are Python decorators and how to use them", "Build a web scraper with Python and BeautifulSoup", "How to use pandas for data analysis", "Create a data visualization with matplotlib", "What is machine learning? Simple explanation", "How to train a neural network with TensorFlow", "Build a recommendation system with Python", "How to use SQLAlchemy with Flask", "What is Docker and how to containerize an app", "How to set up a CI/CD pipeline with GitHub Actions", "What is Kubernetes and when to use it", "Build a serverless function with AWS Lambda", "How to use GraphQL with Apollo", "What is JWT and how to implement authentication", "How to hash passwords in Node.js", "Build a real‑time app with Socket.io", "How to use WebRTC for video calls", "Create a QR code generator with JavaScript", "How to make a Chrome extension", "Build a music player with HTML5 audio", "How to use the Canvas API to draw", "Create an animated loading spinner with CSS", "How to make a dark mode toggle", "What is Tailwind CSS and how to use it", "Build a pricing card with Tailwind", "How to use CSS variables", "Create a responsive grid layout", "How to make a sticky header", "What is the Box Model in CSS", "How to use CSS animations", "Create a typing effect with JavaScript", "How to detect user's device and browser", "What is local storage and session storage", "How to copy text to clipboard with JavaScript", "Build a drag and drop file uploader", "How to use the FileReader API", "Create an image gallery with lightbox", "How to lazy load images", "What is SEO and how to optimize a website", "How to add Google Analytics to a site", "Create a sitemap for your website", "How to make a PWA (Progressive Web App)", "What is AMP and should you use it", "How to test JavaScript with Jest", "What is unit testing and integration testing", "How to debug JavaScript in Chrome DevTools"];
+                const input = elements.chatInput;
+                if (!input) return;
+                const suggestionBox = document.createElement('div');
+                suggestionBox.id = 'suggestion-box';
+                suggestionBox.className = 'absolute left-0 right-0 bottom-full mb-1 bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border border-white/30 dark:border-gray-700/30 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto hidden';
+                const inputParent = input.closest('.relative');
+                if (inputParent) { inputParent.style.position = 'relative'; inputParent.appendChild(suggestionBox); }
+                function autocorrectText(text) {
+                    if (!text.trim()) return { corrected: text, changed: false };
+                    const words = text.split(/(\s+)/);
+                    let changed = false;
+                    const correctedWords = words.map(segment => {
+                        if (/^\s+$/.test(segment)) return segment;
+                        const match = segment.match(/^([^a-zA-Z0-9]*)([a-zA-Z0-9]+)([^a-zA-Z0-9]*)$/);
+                        if (!match) return segment;
+                        const leadingPunct = match[1];
+                        const word = match[2];
+                        const trailingPunct = match[3];
+                        const lowerWord = word.toLowerCase();
+                        if (autocorrectDict[lowerWord]) {
+                            let correction = autocorrectDict[lowerWord];
+                            if (word[0] === word[0].toUpperCase() && word.length > 1) correction = correction.charAt(0).toUpperCase() + correction.slice(1);
+                            else if (word === word.toUpperCase()) correction = correction.toUpperCase();
+                            changed = true;
+                            return leadingPunct + correction + trailingPunct;
+                        }
+                        return segment;
+                    });
+                    return { corrected: correctedWords.join(''), changed };
+                }
+                function levenshtein(a, b) {
+                    const matrix = [];
+                    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+                    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+                    for (let i = 1; i <= b.length; i++) {
+                        for (let j = 1; j <= a.length; j++) {
+                            if (b.charAt(i-1) === a.charAt(j-1)) matrix[i][j] = matrix[i-1][j-1];
+                            else matrix[i][j] = Math.min(matrix[i-1][j-1] + 1, matrix[i][j-1] + 1, matrix[i-1][j] + 1);
+                        }
+                    }
+                    return matrix[b.length][a.length];
+                }
+                let isAutoCorrecting = false;
+                const handleInput = () => {
+                    const originalText = input.value;
+                    if (!isAutoCorrecting) {
+                        isAutoCorrecting = true;
+                        const { corrected, changed } = autocorrectText(originalText);
+                        if (changed && corrected !== originalText) {
+                            input.value = corrected;
+                            input.setSelectionRange(corrected.length, corrected.length);
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            isAutoCorrecting = false;
+                            return;
+                        }
+                        isAutoCorrecting = false;
+                    }
+                    const text = input.value.trim();
+                    if (text.length < 2) { suggestionBox.classList.add('hidden'); return; }
+                    let matches = exampleQueries.filter(q => q.toLowerCase().includes(text.toLowerCase())).slice(0, 8);
+                    if (matches.length === 0) {
+                        const scored = exampleQueries.map(q => ({ query: q, distance: levenshtein(text.toLowerCase(), q.toLowerCase()) })).sort((a,b) => a.distance - b.distance);
+                        matches = scored.slice(0, 3).map(s => `✨ Did you mean: ${s.query}`);
+                    }
+                    suggestionBox.innerHTML = matches.map(q => `<div class="suggestion-item px-4 py-2 hover:bg-white/50 dark:hover:bg-gray-700/50 cursor-pointer text-sm transition-colors border-b border-white/10 last:border-0">${q}</div>`).join('');
+                    suggestionBox.classList.remove('hidden');
+                    suggestionBox.querySelectorAll('.suggestion-item').forEach(item => {
+                        item.addEventListener('click', function() {
+                            let val = this.textContent;
+                            if (val.startsWith('✨ Did you mean:')) val = val.replace('✨ Did you mean:', '').trim();
+                            input.value = val;
+                            input.focus();
+                            suggestionBox.classList.add('hidden');
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        });
+                    });
+                };
+                const debounced = (func, delay) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => func(...args), delay); }; };
+                const debouncedHandle = debounced(handleInput, 400);
+                input.addEventListener('input', debouncedHandle);
+                input.addEventListener('blur', () => setTimeout(() => suggestionBox.classList.add('hidden'), 200));
+                input.addEventListener('focus', () => { if (input.value.trim().length >= 2) handleInput(); });
+                document.addEventListener('click', (e) => { if (!suggestionBox.contains(e.target) && e.target !== input) suggestionBox.classList.add('hidden'); });
+            })();
+
+            window.addEventListener('resize', () => { if (window.innerWidth >= 1024 && state.isSidebarOpen) toggleSidebar(false); });
+            console.log('Xroga AI initialized successfully!');
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+        else init();
+    </script>
 </body>
 </html>
